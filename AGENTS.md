@@ -27,6 +27,7 @@ The rules below are self-contained. For deeper rationale or design context, cons
 - Format C++ files and check the design decisions: `.\scripts\build.ps1 -Format` (run before committing; CI fails on unformatted code, a link that does not resolve, or an entry whose fields are missing or out of order)
 - Check formatting and the design decisions only: `.\scripts\build.ps1 -CheckFormat`
 - Render the architecture diagrams (`docs/diagrams/*.puml`) to the SVGs beside them that `docs/architecture.md` shows: `.\scripts\build.ps1 -Diagrams` (run after changing a diagram or `style.iuml`, and commit the SVGs with it; needs Java 11 or later, and downloads the pinned PlantUML jar to `build\tools`; [DC-145](docs/design_decisions.md#dc-145))
+- Check that the committed diagram SVGs match their sources: `.\scripts\build.ps1 -CheckDiagrams` (renders them again into `build\diagrams` and compares the bytes; CI's `Format Check` job runs it; [DC-146](docs/design_decisions.md#dc-146))
 
 Do **not** invoke `cmake` directly. `build.ps1` initializes the x64 MSVC developer environment automatically, which is required for the build to succeed regardless of which terminal the agent runs in. Calling the raw `cmake` commands without this initialization will fail with a broken compiler or linker error.
 

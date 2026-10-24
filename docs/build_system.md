@@ -487,7 +487,8 @@ under `src/`, `tests/`, or `benchmarks/` differs from `.clang-format`
 the log lists all of them. Run `.\scripts\build.ps1 -Format` locally before
 pushing; it formats the same files in place. Both take the files that git
 tracks and the new ones that `.gitignore` does not exclude, so a file is
-formatted before its first commit.
+formatted before its first commit. The job then checks the diagram SVGs with
+`-CheckDiagrams` ([Architecture diagrams](#architecture-diagrams)).
 
 Both `-Format` and `-CheckFormat` then check the links to design decisions
 ([DC-114](design_decisions.md#dc-114)). They fail when an entry heading in
@@ -541,3 +542,15 @@ checks it against its pinned SHA-256 first, deleting a jar that differs. To
 move to another PlantUML version, change the version and the hash together,
 render every diagram, and review the SVGs, since a new version can change
 their layout.
+
+`.\scripts\build.ps1 -CheckDiagrams` renders every diagram again into
+`build\diagrams` and fails unless each SVG in `docs/diagrams` has the same
+bytes as its new rendering, every diagram has an SVG, and every SVG a
+diagram; it lists every problem first, and changes nothing in `docs/diagrams`
+([DC-146](design_decisions.md#dc-146)). It sees a change to `style.iuml` or to
+the pinned PlantUML version as well as one to a source, since each changes the
+rendering. CI's `Format Check` job runs it after the formatting check, also
+when that failed, with the runner's Java 21 in `JAVA_HOME` in place of its
+default 17, and when it fails uploads the runner's renderings as the
+`rendered-diagrams` artifact. A difference that no source explains, such as a
+different Arial on the runner, shows there.

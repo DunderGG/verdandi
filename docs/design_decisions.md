@@ -159,6 +159,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-143](#dc-143): The portable zip is written by CPack from install rules that take every DLL beside `verdandi.exe`, and `build.ps1 -Package` starts the unpacked copy
   - [DC-144](#dc-144): A `v<version>` tag drafts a GitHub release in a workflow of its own, with `gh`, and the draft is published by hand
   - [DC-145](#dc-145): The architecture diagrams are PlantUML sources, rendered to committed SVGs by a pinned PlantUML jar with Smetana and Arial
+  - [DC-146](#dc-146): CI renders the diagrams again and fails unless the committed SVGs have the same bytes
 - [Testing](#testing)
   - [DC-21](#dc-21): `test_main.cpp`: listing the tests creates no `QApplication`
   - [DC-27](#dc-27): Collectors take their OS calls as injected readers, beside pure calculation functions
@@ -1608,9 +1609,22 @@ How `verdandi.exe` starts, where its log goes, and what a second start does.
 
 **Rationale:** PlantUML gives every diagram one style through an include file and boxes a sequence diagram's participants by thread; Mermaid, which GitHub renders from the Markdown itself, has no shared include and is laid out anew by each viewer. GitHub does not render PlantUML, so the SVGs are committed, and reading the documentation needs nothing installed. The output depends only on what is pinned: PlantUML measures text with the installed font, which Arial makes the same on every Windows, and Smetana is inside the jar, whereas Graphviz would be another install whose version changes the layout. JDK 21 and JDK 26 wrote the same bytes for every diagram. PlantUML's native Windows build, which needs no Java, crashed in Java's font manager measuring some fonts. The jar is pinned and checked as CI's actions are ([DC-121](#dc-121)), and the MIT build is the smaller, 18 MB against 30. Java is found rather than downloaded, because only editing a diagram needs it.
 
-**Consequences:** Nothing checks yet that a committed SVG matches its source. A new PlantUML version can move every diagram, so it is rendered and reviewed as a change of its own.
+**Consequences:** A source changed without `-Diagrams` fails CI, which renders every diagram again ([DC-146](#dc-146)). A new PlantUML version can move every diagram, so it is rendered and reviewed as a change of its own.
 
-**History:** Architecture diagrams (PlantUML), the shared style and the SVGs in `architecture.md`.
+**History:** Architecture diagrams (PlantUML), the shared style and the SVGs in `architecture.md`; the CI check (its consequence, for [DC-146](#dc-146)).
+
+---
+
+<a id="dc-146"></a>
+### DC-146: CI renders the diagrams again and fails unless the committed SVGs have the same bytes
+
+**Decision:** `build.ps1 -CheckDiagrams` renders every diagram in `docs\diagrams` into `build\diagrams`, as `-Diagrams` does, and fails unless each committed SVG has the same bytes as its rendering, every diagram has an SVG and every SVG a diagram. It changes nothing in `docs\diagrams`. CI's `Format Check` job runs it on the runner's Java 21, also when the formatting check failed, and uploads the renderings when it fails.
+
+**Rationale:** A stale SVG shows a design that its source no longer has. Only rendering again sees every cause: an edited source, an edited `style.iuml`, which every diagram includes, or a new pinned PlantUML version. PlantUML's own `--skip-fresh` compares the source embedded in an SVG, which is the diagram's text without its includes, so a change to the style would pass. Comparing bytes works because the rendering is reproducible ([DC-145](#dc-145)), and it needs no tolerance to tune. The `Format Check` job builds nothing, so the check costs it an 18 MB download and a few seconds of Java, and needs neither vcpkg nor MSVC. Java 21 is the version the SVGs were rendered with; the runner's default, 17, would also do. The uploaded renderings show a difference that no source explains, such as another version of Arial on the runner.
+
+**Consequences:** If the runner's Arial ever measured text differently from a developer's, every diagram would fail at once, and the SVGs would have to come from one of the two.
+
+**History:** Architecture diagrams (PlantUML), the CI check.
 
 ---
 

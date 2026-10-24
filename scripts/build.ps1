@@ -177,6 +177,15 @@ not match is deleted. The jar needs Java 11 or later, which the script takes
 from JAVA_HOME, then PATH. A diagram with an error gets no SVG, and the script
 fails with PlantUML's message. Cannot be combined with other options.
 
+.PARAMETER CheckDiagrams
+Renders every diagram in docs\diagrams again, as -Diagrams does but into
+build\diagrams, and exits without building (DC-146). It fails unless each
+SVG in docs\diagrams has the same bytes as its new rendering, every diagram
+has an SVG there, and every SVG there a diagram, and it lists every problem
+before it fails. It changes nothing in docs\diagrams; run -Diagrams to update
+the SVGs. CI's Format Check job runs it. Needs what -Diagrams needs, and
+cannot be combined with other options.
+
 .PARAMETER MsvcEnvironment
 Imports the x64 MSVC developer environment, as every build does, and exits
 without building. In a GitHub Actions job, the script writes each environment
@@ -220,6 +229,9 @@ nothing changes. Cannot be combined with other options.
 .\scripts\build.ps1 -Diagrams
 
 .EXAMPLE
+.\scripts\build.ps1 -CheckDiagrams
+
+.EXAMPLE
 .\scripts\build.ps1 -MsvcEnvironment
 #>
 [CmdletBinding()]
@@ -235,6 +247,7 @@ param(
     [switch]$Format,
     [switch]$CheckFormat,
     [switch]$Diagrams,
+    [switch]$CheckDiagrams,
     [switch]$MsvcEnvironment
 )
 
@@ -366,10 +379,10 @@ if ($MsvcEnvironment -and ($Run -or $Test -or $Configure -or $Release -or $Bench
 {
     throw "-MsvcEnvironment cannot be combined with other options."
 }
-if ($Diagrams -and ($Run -or $Test -or $Configure -or $Release -or $Benchmark -or $Package -or $Coverage -or $Format -or
-        $CheckFormat -or $MsvcEnvironment))
+if (($Diagrams -or $CheckDiagrams) -and ($Run -or $Test -or $Configure -or $Release -or $Benchmark -or $Package -or
+        $Coverage -or $Format -or $CheckFormat -or $MsvcEnvironment -or ($Diagrams -and $CheckDiagrams)))
 {
-    throw "-Diagrams cannot be combined with other options."
+    throw "-Diagrams and -CheckDiagrams cannot be combined with other options."
 }
 $preset = if ($Coverage) { "coverage" } elseif ($Release -or $Benchmark -or $Package) { "release" } else { "default" }
 $runsTests = $Test -or $Coverage
@@ -407,6 +420,8 @@ $benchmarkPaths = @(
 $packageDirectory = Join-Path $buildDirectory "package"
 # The PlantUML sources of the architecture diagrams, and the SVGs rendered from them.
 $diagramsDirectory = Join-Path $projectRoot "docs\diagrams"
+# -CheckDiagrams renders them here, to compare with the committed SVGs.
+$renderedDiagramsDirectory = Join-Path $projectRoot "build\diagrams"
 # Tools that the script downloads, such as the PlantUML jar, kept for every preset.
 $toolsDirectory = Join-Path $projectRoot "build\tools"
 
@@ -964,6 +979,54 @@ if ($Diagrams)
         }
     }
     Write-Host "Rendered $($sources.Count) diagrams in docs\diagrams with PlantUML $plantUmlVersion."
+    return
+}
+
+# Renders the diagrams again and compares the SVGs byte for byte (DC-146): only
+# rendering again sees a change to style.iuml, which every diagram includes, or
+# to the pinned PlantUML version. Lists every problem before it fails.
+if ($CheckDiagrams)
+{
+    $sources = Get-DiagramSources
+    # Only this run's renderings are to be found there afterwards.
+    if (Test-Path -LiteralPath $renderedDiagramsDirectory)
+    {
+        Remove-Item -LiteralPath $renderedDiagramsDirectory -Recurse -Force
+    }
+    Invoke-PlantUml -Sources $sources -OutputDirectory $renderedDiagramsDirectory
+
+    $problems = @()
+    foreach ($source in $sources)
+    {
+        $svgName = [System.IO.Path]::ChangeExtension($source.Name, ".svg")
+        $committedPath = Join-Path $diagramsDirectory $svgName
+        if (-not (Test-Path -LiteralPath $committedPath -PathType Leaf))
+        {
+            $problems += "docs\diagrams\$svgName, which $($source.Name) renders, is missing."
+            continue
+        }
+        $renderedHash = (Get-FileHash -LiteralPath (Join-Path $renderedDiagramsDirectory $svgName) -Algorithm SHA256).Hash
+        if ((Get-FileHash -LiteralPath $committedPath -Algorithm SHA256).Hash -ne $renderedHash)
+        {
+            $problems += "docs\diagrams\$svgName differs from what $($source.Name) renders now, in build\diagrams\$svgName."
+        }
+    }
+    $sourceNames = @($sources | ForEach-Object { $_.BaseName })
+    foreach ($svg in @(Get-ChildItem -LiteralPath $diagramsDirectory -Filter "*.svg" -File))
+    {
+        if ($sourceNames -notcontains $svg.BaseName)
+        {
+            $problems += "docs\diagrams\$($svg.Name) has no diagram that renders it."
+        }
+    }
+
+    if ($problems.Count -gt 0)
+    {
+        $problems | ForEach-Object { Write-Host $_ }
+        throw ("The diagram SVGs in docs\diagrams do not match their sources (see above). Run " +
+            ".\scripts\build.ps1 -Diagrams and commit the SVGs.")
+    }
+    Write-Host "All $($sources.Count) diagram SVGs match their sources, rendered with PlantUML $plantUmlVersion."
     return
 }
 
