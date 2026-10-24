@@ -1,0 +1,72 @@
+@startuml tick_sequence
+!include style.iuml
+
+title A tick: from the fast collectors to the views
+
+box "Tick thread (std::jthread)" $TICK_THREAD_COLOR
+    participant "SamplingScheduler::run()" as run
+    participant "sampleOnce()" as sampleOnce
+    collections "Fast collectors" as fast
+    database "m_slowResults" as slowResults
+    participant "evaluateHealth()" as health
+end box
+
+box "UI thread" $UI_THREAD_COLOR
+    participant "Qt event loop" as eventLoop
+    participant MainWindow as window
+    collections "Views" as views
+end box
+
+loop until stop is requested
+    run -> run : wait on m_sleepCv while\nthe system is suspended
+    opt first tick after a resume
+        run -> fast : resetBaselines()\n(CPU and network)
+    end
+
+    run -> sampleOnce : sampleOnce()
+    activate sampleOnce
+    sampleOnce -> sampleOnce : timestamp = steady_clock::now()
+    sampleOnce -> fast : collect(), on each of CPU, memory,\ndisks, network, uptime, activity
+    note right of fast
+        GetSystemTimes, GlobalMemoryStatusEx,
+        GetIfTable2, …: about 1 ms in all.
+        A sample that cannot be taken is
+        std::nullopt, and the collector logs why.
+    end note
+    fast --> sampleOnce : samples
+    sampleOnce -> slowResults : copy connectivity, network\nnames and processes, under\nm_slowResultsMutex
+    slowResults --> sampleOnce : latest slow results
+    sampleOnce -> health : evaluateHealth(snapshot, thresholds)
+    health --> sampleOnce : SystemHealth
+    sampleOnce --> run : SystemSnapshot
+    deactivate sampleOnce
+
+    alt not the first tick after a resume
+        run ->> eventLoop : emit snapshotReady(snapshot)
+        note right of run
+            Qt::QueuedConnection: Qt copies the
+            snapshot into an event for the UI
+            thread, and emit returns at once.
+        end note
+    else first tick after a resume
+        run -> run : discard the snapshot, which only\nrecorded the new rate baselines
+    end
+
+    par
+        run -> run : wait on m_sleepCv until the interval\nhas passed since the tick started, or\nstop is requested
+    else meanwhile, on the UI thread
+        eventLoop -> window : onSnapshotReady(snapshot)
+        activate window
+        window -> views : updateSnapshot(snapshot), on the\nDashboard, Performance, Processes\nand Network views in turn
+        activate views
+        views -> views : record the snapshot: the histories\n(RingBuffer), ProcessModel's rows
+        opt the view is visible
+            views -> views : refresh the labels and\ncharts, and repaint
+        end
+        views --> window
+        deactivate views
+        deactivate window
+    end
+end
+
+@enduml
