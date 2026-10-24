@@ -28,6 +28,8 @@ if(MSVC)
     # Control Flow Guard and CET shadow-stack compatibility in every build, and
     # a program database in Release too, linked without the identical code
     # and unreferenced functions that /DEBUG would otherwise keep (DC-137).
+    # Each executable names its program database without the directory it was
+    # built in, which a zip built on a developer's PC would otherwise carry.
     add_compile_options(
         /W4
         /permissive-
@@ -38,6 +40,7 @@ if(MSVC)
         /WX
         /guard:cf
         /CETCOMPAT
+        /PDBALTPATH:%_PDB%
         $<$<CONFIG:Release>:/DEBUG>
         $<$<CONFIG:Release>:/OPT:REF>
         $<$<CONFIG:Release>:/OPT:ICF>

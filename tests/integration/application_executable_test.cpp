@@ -170,9 +170,11 @@ TEST(ApplicationExecutableIntegration, Mitigations_ControlFlowGuardAndCetShadowS
     EXPECT_NE(extendedFlags & IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT, 0U);
 }
 
-TEST(ApplicationExecutableIntegration, ProgramDatabase_IsBesideTheExecutable)
+TEST(ApplicationExecutableIntegration, ProgramDatabase_IsNamedWithoutItsDirectoryAndIsBesideTheExecutable)
 {
-    // Release builds link with /DEBUG too, so that crash dumps can be symbolized (DC-137).
+    // Release builds link with /DEBUG too, so that crash dumps can be
+    // symbolized, and the executable names its program database without the
+    // directory it was built in, which debuggers do not need (DC-137).
     const auto image = applicationImage();
     ASSERT_TRUE(image.has_value());
     const auto codeView = debugEntry(*image, IMAGE_DEBUG_TYPE_CODEVIEW);
@@ -186,9 +188,9 @@ TEST(ApplicationExecutableIntegration, ProgramDatabase_IsBesideTheExecutable)
     const std::filesystem::path programDatabase =
         image->stringAt(codeView->PointerToRawData + sizeof(DWORD) + sizeof(GUID) + sizeof(DWORD));
 
-    EXPECT_EQ(programDatabase.filename(),
-              std::filesystem::path{VERDANDI_APPLICATION_PATH}.replace_extension(".pdb").filename());
-    EXPECT_TRUE(std::filesystem::exists(programDatabase)) << programDatabase.string();
+    const std::filesystem::path application{VERDANDI_APPLICATION_PATH};
+    EXPECT_EQ(programDatabase, std::filesystem::path{application}.replace_extension(".pdb").filename());
+    EXPECT_TRUE(std::filesystem::exists(application.parent_path() / programDatabase)) << programDatabase.string();
 }
 
 TEST(ApplicationExecutableIntegration, VersionInformation_HasTheProjectVersionAndADescription)

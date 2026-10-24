@@ -44,7 +44,12 @@ target gives the header to the code that shows them
 ([DC-136](design_decisions.md#dc-136)). It also compiles and links every
 target with Control Flow Guard and CET shadow-stack compatibility, and gives
 Release builds a program database, such as `verdandi.pdb` beside
-`verdandi.exe` ([DC-137](design_decisions.md#dc-137)).
+`verdandi.exe`. Every executable names its program database without the
+directory it was built in (`/PDBALTPATH:%_PDB%`), so the executable shows
+nothing of the PC that built it, although the program database still holds
+the paths of the files built into it; debuggers find the program database by
+its name and GUID beside the executable or on a symbol path
+([DC-137](design_decisions.md#dc-137)).
 
 `CMakePresets.json` is the checked-in build entry point. Its `default`
 configure preset selects the Ninja generator, uses `build/default` for generated
