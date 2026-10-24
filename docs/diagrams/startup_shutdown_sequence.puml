@@ -1,0 +1,114 @@
+@startuml startup_shutdown_sequence
+!include style.iuml
+
+title Startup and shutdown: the threads and their cancellation
+
+box "UI thread" $UI_THREAD_COLOR
+    participant "main()" as main
+    participant "runMonitor()" as runMonitor
+    participant MainWindow as window
+end box
+
+participant "Sampling-\nScheduler" as scheduler
+
+box "Scheduler threads" $SLOW_THREAD_COLOR
+    participant "tick thread\n(std::jthread)" as tickThread
+    participant "slow-collector\nthread\n(std::jthread)" as slowThread
+end box
+
+participant "Connectivity-\nCollector" as connectivity
+participant "NetworkProfile-\nCollector" as profiles
+
+box "Network-name\nworker" $WORKER_THREAD_COLOR
+    participant "worker\n(std::jthread)" as worker
+end box
+
+box "OS thread pool" $OS_THREAD_COLOR
+    participant "Notification\ncallbacks" as callback
+end box
+
+== Startup ==
+
+main -> main : QApplication, the\ncommand line
+main -> main : claimSingleInstance():\nCreateMutexW
+alt another monitor holds the mutex
+    main -> main : ask it to bring its\nwindow to the front, and\nreturn before the log opens
+end
+main -> main : read the settings, then\nconfigure the log with\nthe level they hold
+main -> runMonitor : runMonitor()
+activate runMonitor
+
+runMonitor -> scheduler : construct, and\nregisterSystemCollectors()
+scheduler -> connectivity : construct
+connectivity -> connectivity : read the status at once\n(GetNetworkConnectivityHint)
+connectivity -> callback : subscribe (NotifyNetwork-\nConnectivityHintChange)
+scheduler -> profiles : construct
+profiles -> callback : subscribe to the\nsame notification
+profiles -> worker ** : start
+activate worker
+worker -> worker : enter COM's MTA,\nread the names at once,\nthen wait for a change\nor for them to expire
+scheduler -> scheduler : set the change listeners\nof the two collectors
+runMonitor -> scheduler : setInterval(),\nsetSlowInterval()
+runMonitor -> runMonitor : SettingsService;\nPowerEventFilter, installed\nas a native event filter
+runMonitor -> window ** : construct, setSettings(),\nsetProcessTerminator()
+runMonitor -> runMonitor : connect snapshotReady to\nonSnapshotReady (Qt::Queued-\nConnection) and settingsChanged;\nInstanceServer listens
+runMonitor -> scheduler : start()
+scheduler -> slowThread ** : runSlowCollectors(stop_token)
+activate slowThread
+scheduler -> tickThread ** : run(stop_token)
+activate tickThread
+note over tickThread, slowThread
+    The slow-collector thread refreshes
+    at once, so the first process list
+    reaches a snapshot within a tick.
+end note
+runMonitor -> window : show()
+runMonitor -> runMonitor : application.exec():\nthe event loop runs\nuntil the window closes
+
+== Shutdown ==
+
+runMonitor -> scheduler : stop()
+scheduler -> tickThread : request_stop()
+scheduler -> slowThread : request_stop()
+scheduler -> scheduler : notify m_sleepCv\nunder m_sleepMutex
+note over tickThread, slowThread
+    Each wait on m_sleepCv takes its
+    thread's stop_token, so it ends at
+    once. A collection in progress
+    finishes first, and none follows it.
+end note
+scheduler -> tickThread : join()
+tickThread --> scheduler
+destroy tickThread
+scheduler -> slowThread : join()
+slowThread --> scheduler
+destroy slowThread
+
+runMonitor -> runMonitor : return: the locals are\ndestroyed in reverse order
+runMonitor -> runMonitor : InstanceServer\nstops listening
+runMonitor -> window !! : destroy
+runMonitor -> runMonitor : PowerEventFilter,\nSettingsService
+runMonitor -> scheduler : ~SamplingScheduler()
+scheduler -> scheduler : clear the change listeners
+scheduler -> profiles : ~NetworkProfileCollector()
+profiles -> callback : cancel the subscription;\nCancelMibChangeNotify2 waits\nfor a callback in progress
+profiles -> worker : ~jthread: request_stop(),\nthen join()
+note right of worker
+    A COM read in progress,
+    which has no time limit,
+    delays the join.
+end note
+worker --> profiles
+destroy worker
+profiles --> scheduler
+destroy profiles
+scheduler -> connectivity : ~ConnectivityCollector()
+connectivity -> callback : cancel the subscription
+connectivity --> scheduler
+destroy connectivity
+destroy scheduler
+deactivate runMonitor
+
+main -> main : spdlog::shutdown(), last,\nsince the teardown above\ncan log; then return, which\nreleases the instance mutex
+
+@enduml
