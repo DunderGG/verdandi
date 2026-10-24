@@ -1,0 +1,78 @@
+@startuml slow_collector_sequence
+!include style.iuml
+
+title The slow collectors: from the process list to the snapshot
+
+box "OS thread pool" $OS_THREAD_COLOR
+    participant "Notification\ncallbacks" as callback
+end box
+
+box "Network-name worker\n(std::jthread)" $WORKER_THREAD_COLOR
+    participant "NetworkProfile-\nCollector::run()" as worker
+end box
+
+box "Slow-collector thread\n(std::jthread)" $SLOW_THREAD_COLOR
+    participant "SamplingScheduler::\nrunSlowCollectors()" as slow
+end box
+
+participant "Connectivity-\nCollector" as connectivity
+participant "NetworkProfile-\nCollector" as profiles
+participant "Process-\nCollector" as processes
+database "m_slowResults" as slowResults
+
+box "Tick thread\n(std::jthread)" $TICK_THREAD_COLOR
+    participant "sampleOnce()" as sampleOnce
+end box
+
+loop until stop is requested
+    slow -> slow : wait on m_sleepCv until the slow\ninterval has passed since the last full\nrefresh, a collector reports a change,\nor the system resumes; then wait\nwhile the system is suspended
+
+    alt a change was reported, within the slow interval
+        slow -> connectivity : collect()
+        connectivity --> slow : cached status
+        slow -> profiles : collect()
+        profiles --> slow : copy of the\nlatest names
+        slow -> slowResults : under m_slowResultsMutex, replace\nconnectivity and the names; keep\nthe process list
+    else a full refresh: the interval has passed, or the system resumed
+        opt first refresh after a resume
+            slow -> processes : resetBaselines()
+        end
+        slow -> connectivity : collect()
+        connectivity --> slow : status
+        slow -> profiles : collect()
+        profiles --> slow : names
+        slow -> processes : collect()
+        activate processes
+        processes -> processes : NtQuerySystemInformation\n(SystemProcessInformation), in\na buffer that grows to fit
+        processes -> processes : CPU and I/O rates against\nbaselines kept by\n(PID, creation time)
+        processes -> processes : path and command line, read\nonce for each new identity;\nnever lsass.exe or csrss.exe
+        processes --> slow : processes
+        deactivate processes
+        note right of slow
+            Collected without holding a lock:
+            the process list takes a few ms.
+        end note
+        slow -> slowResults : under m_slowResultsMutex,\nmove in all three results
+    end
+end
+
+sampleOnce -> slowResults : every tick, under m_slowResultsMutex,\ncopy the latest three into the snapshot
+note over sampleOnce
+    Until the first slow refresh,
+    the snapshot has no process
+    list and no network names, and
+    connectivity is Unknown.
+end note
+
+== Event-driven changes, on threads that the scheduler does not own ==
+
+callback -> connectivity : NotifyNetworkConnectivity-\nHintChange: store the\nstatus under its mutex
+connectivity -> slow : change listener: requestEventRefresh()\nsets m_isEventRefreshPending and\nnotifies m_sleepCv
+callback -> profiles : the same notification:\nmark the names stale,\nwake the worker
+worker -> worker : read the names with\nINetworkListManager (COM),\nat most once a second, and\nonce a minute anyway
+worker -> profiles : store the names\nunder its mutex
+opt the names changed
+    profiles -> slow : change listener:\nrequestEventRefresh()
+end
+
+@enduml
