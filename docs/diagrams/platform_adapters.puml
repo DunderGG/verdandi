@@ -1,0 +1,105 @@
+@startuml platform_adapters
+!include style.iuml
+
+title platform/windows: the collectors and the other adapters
+
+left to right direction
+
+package "app" $APP_COLOR {
+    class "registerSystemCollectors()" as registerSystemCollectors << (F,#FFF59D) function >>
+    class "main.cpp" as mainCpp << (F,#FFF59D) composition root >>
+    class PowerEventFilter
+    class "claimSingleInstance()" as claimSingleInstance << (F,#FFF59D) function >>
+}
+
+package "platform/windows" $PLATFORM_COLOR {
+    package "Fast collectors, on the tick thread" as fastCollectors {
+        class CpuCollector <<ICpuCollector>> {
+            GetSystemTimes
+            {field} NtQuerySystemInformation(Ex)
+            CallNtPowerInformation, once
+        }
+        class NetworkCollector <<INetworkCollector>> {
+            GetIfTable2
+        }
+        class AdapterDetailsCache {
+            GetAdaptersAddresses
+            SetupAPI, for hidden adapters
+            NotifyIpInterfaceChange
+        }
+        class MemoryCollector <<IMemoryCollector>> {
+            GlobalMemoryStatusEx
+            GetPerformanceInfo
+        }
+        class DiskCollector <<IDiskCollector>> {
+            GetLogicalDrives
+            GetDiskFreeSpaceExW
+        }
+        class UptimeCollector <<IUptimeCollector>> {
+            GetTickCount64
+        }
+        class SystemActivityCollector <<ISystemActivityCollector>> {
+            GetPerformanceInfo
+        }
+    }
+
+    package "Slow collectors, on the slow-collector thread" as slowCollectors {
+        class ProcessCollector <<IProcessCollector>>
+        class SystemProcessInformationReader {
+            {field} NtQuerySystemInformation(SystemProcessInformation)
+        }
+        class ProcessIdentityCache {
+            QueryFullProcessImageNameW
+            NtQueryInformationProcess
+            never lsass.exe or csrss.exe
+        }
+        class ConnectivityCollector <<IConnectivityCollector>> {
+            GetNetworkConnectivityHint
+        }
+        class NetworkProfileCollector <<INetworkProfileCollector>> {
+            m_worker : std::jthread
+            INetworkListManager, in COM's MTA
+        }
+        class ConnectivitySubscription {
+            NotifyNetworkConnectivityHintChange
+            CancelMibChangeNotify2
+        }
+    }
+
+    package "Other adapters" as otherAdapters {
+        class "terminateOwnedProcess()" as terminateOwnedProcess << (F,#FFF59D) function >> {
+            OpenProcess, then the token's owner and elevation
+            TerminateProcess
+        }
+        class "currentProcessIdentity()" as currentProcessIdentity << (F,#FFF59D) function >>
+        class "powerTransitionFromMessage()" as powerTransitionFromMessage << (F,#FFF59D) function >> {
+            WM_POWERBROADCAST
+        }
+        class InstanceMutex {
+            CreateMutexW, in the Local\\ namespace
+        }
+    }
+}
+
+NetworkCollector *-- AdapterDetailsCache
+ProcessCollector *-- SystemProcessInformationReader
+ProcessCollector *-- ProcessIdentityCache
+ConnectivityCollector *-- ConnectivitySubscription
+NetworkProfileCollector *-- ConnectivitySubscription
+
+registerSystemCollectors ..> fastCollectors : creates
+registerSystemCollectors ..> slowCollectors : creates
+mainCpp ..> terminateOwnedProcess : passes to ProcessesView
+mainCpp ..> currentProcessIdentity
+PowerEventFilter ..> powerTransitionFromMessage
+claimSingleInstance ..> InstanceMutex
+
+legend bottom left
+    Each class lists the Windows APIs it calls. A collector's stereotype names the interface in
+    monitoring's collector.h that it implements; it converts what Windows returns to domain
+    values, and its constructor takes the readers that tests replace with fakes.
+    The callbacks of the notifications run on OS thread-pool threads. They store a value or mark
+    a cache stale, and wake the slow-collector thread or the network-name worker.
+end legend
+
+@enduml

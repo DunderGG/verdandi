@@ -1,0 +1,157 @@
+@startuml domain_types
+!include style.iuml
+
+title domain: the snapshot and the other value types
+
+left to right direction
+
+package "domain" $DOMAIN_COLOR {
+    struct SystemSnapshot {
+        timestamp : steady_clock::time_point
+        cpu : optional<CpuSample>
+        memory : optional<MemorySample>
+        disks : optional<vector<DiskSample>>
+        networks : optional<vector<NetworkSample>>
+        connectivity : ConnectivityStatus
+        networkProfiles : optional<vector<NetworkProfile>>
+        uptime : optional<milliseconds>
+        health : SystemHealth
+        processes : optional<vector<ProcessInfo>>
+        activity : optional<SystemActivitySample>
+    }
+
+    struct CpuSample {
+        totalUsagePercent : float
+        coreUsagePercents : vector<float>
+        baseSpeedMhz : optional<uint32_t>
+    }
+
+    struct MemorySample {
+        totalBytes, availableBytes : uint64_t
+        commitLimit, commitCurrent : uint64_t
+        systemCacheBytes : optional<uint64_t>
+        …
+    }
+
+    struct DiskSample {
+        volumeName : string
+        totalBytes, freeBytes : uint64_t
+        usagePercent : float
+    }
+
+    struct NetworkSample {
+        interfaceId : uint64_t
+        friendlyName : string
+        inBytesPerSec : optional<uint64_t>
+        outBytesPerSec : optional<uint64_t>
+        operationalStatus : OperationalStatus
+        type : AdapterType
+        ipAddresses : vector<IpAddress>
+        isHidden : bool
+        …
+    }
+
+    struct ConnectivityStatus {
+        level : ConnectivityLevel
+        isMetered : optional<bool>
+        isRoaming : optional<bool>
+    }
+
+    enum ConnectivityLevel {
+        Unknown
+        None
+        LocalAccess
+        ConstrainedInternetAccess
+        InternetAccess
+    }
+
+    struct NetworkProfile {
+        name : string
+        category : optional<NetworkCategory>
+        interfaceIds : vector<uint64_t>
+    }
+
+    struct SystemHealth {
+        cpu, memory, disk, network : HealthLevel
+        overall : HealthLevel
+    }
+
+    enum HealthLevel {
+        Unknown
+        Healthy
+        Warning
+        Critical
+    }
+
+    struct ProcessInfo {
+        pid, parentPid : uint32_t
+        creationTime : system_clock::time_point
+        imageName : string
+        imagePath : optional<string>
+        cpuUsagePercent : optional<float>
+        ioReadBytesPerSec : optional<uint64_t>
+        detailsStatus : ProcessDetailsStatus
+        …
+        identity() : ProcessIdentity
+    }
+
+    struct ProcessIdentity {
+        pid : uint32_t
+        creationTime : system_clock::time_point
+    }
+
+    struct SystemActivitySample {
+        processCount : uint32_t
+        threadCount : uint32_t
+        handleCount : uint32_t
+    }
+
+    struct Settings {
+        refreshInterval : milliseconds
+        displayUnits : DisplayUnits
+        dashboardPanels : DashboardPanels
+        logLevel : LogLevel
+    }
+
+    enum ProcessTerminationResult {
+        Terminated
+        AlreadyExited
+        NotOwnedByCurrentUser
+        Elevated
+        NeverOpened
+        AccessDenied
+        Failed
+    }
+
+    class "RingBuffer<T>" as RingBuffer {
+        push(sample : T)
+        samples() : span<const T>
+        size() : size_t
+    }
+}
+
+SystemSnapshot *-- CpuSample
+SystemSnapshot *-- MemorySample
+SystemSnapshot *-- "*" DiskSample
+SystemSnapshot *-- "*" NetworkSample
+SystemSnapshot *-- ConnectivityStatus
+SystemSnapshot *-- "*" NetworkProfile
+SystemSnapshot *-- SystemHealth
+SystemSnapshot *-- "*" ProcessInfo
+SystemSnapshot *-- SystemActivitySample
+ConnectivityStatus *-- ConnectivityLevel
+SystemHealth *-- HealthLevel
+ProcessInfo ..> ProcessIdentity : identity()
+
+legend bottom left
+    * **SystemSnapshot** is a value, copied from the tick thread to the UI thread. An optional
+      field is std::nullopt when no collector is registered or no valid sample was taken, never
+      a zero. connectivity, networkProfiles and processes come from the slow collectors.
+    * **ProcessIdentity**: a process is its PID and creation time, never its PID alone,
+      because Windows reuses PIDs.
+    * **RingBuffer<T>** holds the fixed-capacity histories of the charts and sparklines.
+    * **Settings** are what the settings file holds, and **ProcessTerminationResult** says
+      what ending a process did.
+end legend
+
+@enduml

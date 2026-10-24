@@ -1,0 +1,55 @@
+@startuml modules
+!include style.iuml
+
+title Modules and the CMake targets that build them
+
+package "app" $APP_COLOR {
+    component "verdandi\n<size:10>main.cpp, the composition root</size>" as exe
+    component "verdandi_app_*\n<size:10>collector registration, settings service,</size>\n<size:10>power events, single instance, logging</size>" as appLibraries
+}
+
+package "ui" $UI_COLOR {
+    component "verdandi_ui\n<size:10>main window, tabs, process model</size>\n<size:10>Qt6::Widgets</size>" as uiTarget
+    component "verdandi_ui_charts\n<size:10>SparklineWidget</size>\n<size:10>Qt6::Widgets</size>" as chartsTarget
+}
+
+package "persistence" $PERSISTENCE_COLOR {
+    component "verdandi_persistence\n<size:10>the settings file</size>\n<size:10>nlohmann/json</size>" as persistenceTarget
+}
+
+package "monitoring" $MONITORING_COLOR {
+    component "verdandi_monitoring\n<size:10>SamplingScheduler, health evaluation</size>\n<size:10>Qt6::Core</size>" as monitoringTarget
+    component "verdandi_collector_interfaces\n<size:10>collector.h, header only</size>" as interfacesTarget
+}
+
+package "platform/windows" $PLATFORM_COLOR {
+    component "verdandi_platform_windows\n<size:10>collectors and adapters</size>\n<size:10>Windows SDK</size>" as platformTarget
+}
+
+package "domain" $DOMAIN_COLOR {
+    component "verdandi_domain\n<size:10>value types and RingBuffer<T>, header only</size>\n<size:10>standard library only</size>" as domainTarget
+}
+
+exe --> appLibraries
+exe --> uiTarget
+appLibraries --> persistenceTarget
+appLibraries --> monitoringTarget
+appLibraries --> platformTarget
+uiTarget --> chartsTarget
+uiTarget --> domainTarget
+chartsTarget --> domainTarget
+persistenceTarget --> domainTarget
+monitoringTarget --> interfacesTarget
+platformTarget --> interfacesTarget
+interfacesTarget --> domainTarget
+
+legend bottom left
+    An arrow points from a target to one it links to.
+    * **platform/windows** is the only module that includes Windows headers. It converts
+      Windows types to domain types, and uses monitoring only for the collector interfaces.
+    * **ui** includes no Windows headers: Windows reaches it only as domain values, and as
+      functions that main.cpp passes in.
+    * **domain** has no Qt and no Windows, and every module uses it.
+end legend
+
+@enduml

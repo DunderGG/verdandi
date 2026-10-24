@@ -1,0 +1,104 @@
+@startuml monitoring_scheduler
+!include style.iuml
+
+title monitoring: the collector interfaces and the scheduler
+
+package "monitoring" $MONITORING_COLOR {
+    package "collector.h (verdandi_collector_interfaces)" as interfaces {
+        interface "ICollector<T>" as ICollector {
+            {abstract} collect() : T
+        }
+
+        interface "IRateCollector<T>" as IRateCollector {
+            {abstract} resetBaselines()
+        }
+
+        interface "IEventDrivenCollector<T>" as IEventDrivenCollector {
+            {abstract} setChangeListener(listener : ChangeListener)
+        }
+    }
+
+    class SamplingScheduler {
+        start()
+        stop()
+        setInterval(interval : milliseconds)
+        setSlowInterval(interval : milliseconds)
+        onSystemSuspending()
+        onSystemResumed()
+        set…Collector(collector : unique_ptr<I…Collector>)
+        sampleOnce() : SystemSnapshot
+        refreshSlowCollectors()
+        .. signal ..
+        snapshotReady(snapshot : SystemSnapshot)
+        .. threads ..
+        m_thread : std::jthread
+        m_slowThread : std::jthread
+        .. guarded by m_slowResultsMutex ..
+        m_slowResults : SlowResults
+    }
+
+    struct SlowResults {
+        connectivity : ConnectivityStatus
+        networkProfiles : optional<vector<NetworkProfile>>
+        processes : optional<vector<ProcessInfo>>
+    }
+
+    class "health_evaluator.h" as healthEvaluator << (F,#FFF59D) functions >> {
+        evaluateHealth(snapshot, thresholds) : SystemHealth
+    }
+
+    struct HealthThresholds {
+        cpu, memory, disk : UsageThresholds
+    }
+}
+
+package "app" $APP_COLOR {
+    class "registerSystemCollectors()" as registerSystemCollectors << (F,#FFF59D) function >>
+    class SettingsService {
+        change(settings : Settings)
+    }
+    class PowerEventFilter {
+        nativeEventFilter(…)
+    }
+}
+
+package "ui" $UI_COLOR {
+    class MainWindow {
+        onSnapshotReady(snapshot : SystemSnapshot)
+    }
+}
+
+package "domain" $DOMAIN_COLOR {
+    struct SystemSnapshot
+}
+
+IRateCollector -up-|> ICollector
+IEventDrivenCollector -up-|> ICollector
+SamplingScheduler *-- "9" ICollector : owns, as unique_ptr
+SamplingScheduler *-- SlowResults
+SamplingScheduler ..> healthEvaluator : each tick
+healthEvaluator ..> HealthThresholds
+SamplingScheduler ..> SystemSnapshot : assembles
+registerSystemCollectors ..> SamplingScheduler : set…Collector()
+SettingsService ..> SamplingScheduler : setInterval()\nsetSlowInterval()
+PowerEventFilter ..> SamplingScheduler : onSystemSuspending()\nonSystemResumed()
+SamplingScheduler ..> MainWindow : snapshotReady,\nQt::QueuedConnection
+
+legend bottom left
+    collector.h names one interface for each kind of collector. The tick thread runs the fast
+    collectors every refresh interval; the slow-collector thread runs the slow ones every 2 seconds,
+    or every refresh interval when that is longer, and the event-driven ones again when they report
+    a change.
+    |= Interface |= Base |= Sample |= Thread |
+    | ICpuCollector | IRateCollector | optional<CpuSample> | tick |
+    | IMemoryCollector | ICollector | optional<MemorySample> | tick |
+    | IDiskCollector | ICollector | optional<vector<DiskSample>> | tick |
+    | INetworkCollector | IRateCollector | optional<vector<NetworkSample>> | tick |
+    | IUptimeCollector | ICollector | milliseconds | tick |
+    | ISystemActivityCollector | ICollector | optional<SystemActivitySample> | tick |
+    | IProcessCollector | IRateCollector | optional<vector<ProcessInfo>> | slow |
+    | IConnectivityCollector | IEventDrivenCollector | ConnectivityStatus | slow |
+    | INetworkProfileCollector | IEventDrivenCollector | optional<vector<NetworkProfile>> | slow |
+end legend
+
+@enduml

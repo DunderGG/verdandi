@@ -1,0 +1,119 @@
+@startuml ui_views
+!include style.iuml
+
+title ui: the views and the presentation state they keep
+
+package "ui" $UI_COLOR {
+    class MainWindow <<QMainWindow>> {
+        setSettings(settings : Settings)
+        bringToFront()
+        .. slot ..
+        onSnapshotReady(snapshot : SystemSnapshot)
+        .. signal ..
+        settingsChanged(settings : Settings)
+    }
+
+    class SettingsDialog <<QDialog>> {
+        settings() : Settings
+    }
+
+    class DashboardView <<QWidget>> {
+        updateSnapshot(snapshot : SystemSnapshot)
+        m_cpuHistory, m_memoryHistory, … : SampleHistory
+    }
+
+    class PerformanceView <<QWidget>> {
+        updateSnapshot(snapshot : SystemSnapshot)
+    }
+
+    abstract class PerformancePage <<QWidget>> {
+        recordSnapshot(snapshot : SystemSnapshot)
+        {abstract} refresh()
+        {abstract} recordSamples(snapshot : SystemSnapshot)
+    }
+
+    class "CpuPerformancePage\nMemoryPerformancePage\nDiskPerformancePage\nNetworkPerformancePage" as pages {
+        histories : SampleHistory
+    }
+
+    class ProcessesView <<QWidget>> {
+        updateSnapshot(snapshot : SystemSnapshot)
+        setProcessTerminator(terminator : ProcessTerminator)
+        setMonitorIdentity(identity : ProcessIdentity)
+    }
+
+    class ProcessModel <<QAbstractItemModel>> {
+        updateProcesses(processes, now)
+        updateTime(now)
+        setTreeMode(enabled : bool)
+    }
+
+    class ProcessSortFilterProxyModel <<QSortFilterProxyModel>>
+
+    class NetworkView <<QWidget>> {
+        updateSnapshot(snapshot : SystemSnapshot)
+    }
+
+    class AdapterThroughputHistory {
+        record(networks)
+    }
+
+    class "SampleHistory" as SampleHistory << (T,#E1BEE7) alias >> {
+        RingBuffer<optional<float>>
+    }
+
+    class "ProcessTerminator" as ProcessTerminator << (T,#E1BEE7) alias >> {
+        {field} function<ProcessTerminationResult(const ProcessInfo&)>
+    }
+
+    package "charts (verdandi_ui_charts)" as charts {
+        class SparklineWidget <<QWidget>> {
+            setSeriesSamples(series, samples)
+        }
+    }
+}
+
+package "monitoring" $MONITORING_COLOR {
+    class SamplingScheduler {
+        .. signal ..
+        snapshotReady(snapshot : SystemSnapshot)
+    }
+}
+
+package "app" $APP_COLOR {
+    class "main.cpp" as mainCpp << (F,#FFF59D) composition root >>
+}
+
+SamplingScheduler ..> MainWindow : snapshotReady → onSnapshotReady,\nQt::QueuedConnection
+mainCpp ..> MainWindow : sets the settings, and connects\nsettingsChanged → SettingsService::change(),\nwhich applies and saves them
+mainCpp ..> ProcessesView : terminateOwnedProcess,\nthe monitor's identity
+MainWindow ..> SettingsDialog : opens on a copy\nof the settings
+
+MainWindow *-- DashboardView
+MainWindow *-- PerformanceView
+MainWindow *-- ProcessesView
+MainWindow *-- NetworkView
+PerformanceView *-- "4" PerformancePage
+pages -up-|> PerformancePage
+ProcessesView *-- ProcessModel
+ProcessesView *-- ProcessSortFilterProxyModel
+ProcessSortFilterProxyModel o-- ProcessModel : source
+ProcessesView o-- ProcessTerminator
+NetworkView *-- AdapterThroughputHistory
+AdapterThroughputHistory ..> SampleHistory
+DashboardView ..> SampleHistory
+pages ..> SampleHistory
+DashboardView *-- SparklineWidget
+pages *-- SparklineWidget
+
+legend bottom left
+    MainWindow passes every snapshot to every view, so that each history has no gaps
+    when its view is shown. A hidden view records the snapshot and repaints nothing.
+    ProcessModel is the one Qt item model: it updates only the rows and cells that changed.
+    The other views keep their presentation state, the histories of their charts, in
+    RingBuffers, and ask the *_formatting.h functions for every text they show.
+    Windows reaches the views only as domain values, and as the functions that main.cpp
+    passes in, such as the ProcessTerminator.
+end legend
+
+@enduml
