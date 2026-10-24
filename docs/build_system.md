@@ -358,6 +358,7 @@ to `cl`, ensuring that CMake never silently falls back to an incompatible compil
 | Git | Obtains this repository and lets the bootstrap script clone vcpkg at the reproducible baseline. |
 | VS Code CMake Tools (optional) | Reads `CMakePresets.json`, selects the MSVC environment, and provides configure/build/test commands within VS Code. |
 | VS Code C/C++ extension (optional) | Adds C++ language services such as IntelliSense, navigation, and debugging support. It does not replace the compiler or build system. |
+| Java 11 or later (optional) | Runs the PlantUML jar with which `-Diagrams` renders the [architecture diagrams](#architecture-diagrams). Building does not need it. |
 
 Ninja is deliberately separate from CMake: CMake generates build instructions,
 while Ninja performs the compilation. A Visual Studio generator could remove the
@@ -516,3 +517,27 @@ recorded in `build.ps1`: locally a different version is a warning, and in CI it
 is an error. `bootstrap.ps1` reports whether it finds clang-format, which comes
 with the C++ Clang tools that it adds with `-InstallMissing`. A missing
 clang-format is only a warning there, because building does not need it.
+
+## Architecture diagrams
+
+The diagrams in [architecture.md](architecture.md) are SVGs rendered from the
+PlantUML sources in `docs/diagrams`, one `.puml` file for each diagram, each of
+which includes the shared `style.iuml` on the line after its `@startuml`
+([DC-145](design_decisions.md#dc-145)). The style lays class diagrams out with
+Smetana, the Graphviz port inside PlantUML, so Graphviz is not needed, and
+sets Arial, so that the text measures the same on every Windows. Name each
+diagram after its file (`@startuml modules` in `modules.puml`), since PlantUML
+names the SVG after the diagram.
+
+After changing a source or the style, run `.\scripts\build.ps1 -Diagrams` and
+commit the SVGs with the sources. It renders every `.puml` to an SVG beside it,
+and removes any SVG there that no source renders, such as one left by a
+renamed diagram. A diagram with an error gets no SVG, and the script fails with
+PlantUML's message. It needs Java 11 or later, from `JAVA_HOME` or `PATH`, for
+example `winget install EclipseAdoptium.Temurin.21.JDK`; building does not.
+The first run downloads the MIT-licensed PlantUML jar of the version pinned
+in `build.ps1` from PlantUML's GitHub release to `build\tools`, and every run
+checks it against its pinned SHA-256 first, deleting a jar that differs. To
+move to another PlantUML version, change the version and the hash together,
+render every diagram, and review the SVGs, since a new version can change
+their layout.

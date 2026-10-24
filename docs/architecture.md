@@ -72,6 +72,8 @@ The initial MVP should use JSON plus bounded in-memory history. Do not add SQLit
 
 The UI must remain independent of the data-collection implementation. Collectors gather data in the background and publish immutable snapshots; presentation code renders those snapshots on the Qt UI thread.
 
+The diagrams in this document are SVGs rendered from the PlantUML sources in [diagrams/](diagrams/), which share the style in [style.iuml](diagrams/style.iuml). After changing a source, run `.\scripts\build.ps1 -Diagrams` and commit the SVGs with it ([DC-145](design_decisions.md#dc-145)).
+
 ```text
 Qt 6 Widgets UI
   └─ View models / presentation state
@@ -109,6 +111,28 @@ Windows integration layer (platform/windows)
 | `domain` | Typed metrics, process identity, health state, the result of ending a process, and the user's settings, plus the `RingBuffer<T>` container for time-series history. Free of Qt and Windows dependencies. |
 | `persistence` | The JSON settings file initially; a repository interface and SQLite implementation when durable history is added. Free of Qt and Windows dependencies. |
 | `tests` | Unit and integration tests. |
+
+![The modules' CMake targets and the targets each links to](diagrams/modules.svg)
+
+### Class diagrams
+
+Each module's diagram shows its main types and what crosses its boundary, not every member.
+
+The domain types: the snapshot, the samples it holds, and the other values that cross module boundaries.
+
+![The domain types](diagrams/domain_types.svg)
+
+The collector interfaces, which `platform/windows` implements, and the scheduler that owns the collectors, between `app`, which registers them, and the main window, which receives the snapshots.
+
+![The collector interfaces and the sampling scheduler](diagrams/monitoring_scheduler.svg)
+
+The Windows collectors with the APIs each calls, and the other adapters that `app` uses.
+
+![The Windows collectors and adapters](diagrams/platform_adapters.svg)
+
+The main window, its views, and the presentation state they keep.
+
+![The UI's views and models](diagrams/ui_views.svg)
 
 ### Threading model
 
@@ -188,6 +212,10 @@ When the value is costly to read, a notification can instead mark a cache stale,
 - **A worker of the collector's own**, for a read that calls into another process. `NetworkProfileCollector` owns a `std::jthread` that reads at start, when the names are stale, and when they have expired, but never sooner than a minimum interval after its last read. The callback marks the names stale and wakes the worker. The worker stores each result and, if it differs from the previous one, calls the change listener. `collect()` only copies the latest result (rule 4), and before the first read finishes it returns no names, in place of rule 3. The registration is declared last and the worker before it, so notifications are cancelled first and the worker is joined next, before the state they share is destroyed.
 - **The collecting thread**, for a cheap in-process read. The cache starts stale, so the first `collect()` reads, and `collect()` reads again only when the cache is stale or has expired. The network collector's adapter details (`AdapterDetailsCache`) follow this form. They have no change listener, because the network collector is a fast collector, collected on every tick anyway.
 
+The slow-collector thread's refreshes, the merge that every tick reads, and how the event-driven collectors wake the thread:
+
+![The slow collectors, their merge into the snapshot, and the event-driven refresh](diagrams/slow_collector_sequence.svg)
+
 ### Data flow
 
 1. The scheduler thread sleeps until the configured interval (default 1 second) has passed since its last tick started, then wakes and calls fast collectors for aggregate CPU, memory, disk, and network samples. A new interval applies to the sleep in progress ([DC-17](design_decisions.md#dc-17)).
@@ -196,6 +224,14 @@ When the value is costly to read, a notification can instead mark a cache stale,
 4. Bounded ring buffers (`domain::RingBuffer`) retain recent samples for sparkline charts. The dashboard keeps its own short presentation history for its mini sparklines, the Network tab keeps a minute of throughput per adapter, and each Performance tab page keeps the history for its charts; histories needed outside the UI (e.g. for alert rules) may live in `monitoring`.
 5. The scheduler emits the snapshot as a Qt signal. View models receive it via queued connection on the UI thread and update Qt item models.
 6. Optional persistence receives batched writes on a background worker; it must never block sampling or rendering.
+
+![A tick, from the fast collectors to the views](diagrams/tick_sequence.svg)
+
+### Startup and shutdown
+
+`main()` claims the instance mutex ([Single instance](#single-instance)), reads the settings and configures the log. `runMonitor()` then builds the scheduler, its collectors and the window, and starts the scheduler's two threads. When the window closes, the event loop ends, and `stop()` asks both threads to stop and joins them. Leaving `runMonitor()` destroys the window, then the scheduler and its collectors, which cancel their notification subscriptions and join the network-name worker. `main()` shuts the logger down last ([Logging](#logging)).
+
+![Startup and shutdown, with the threads and their cancellation](diagrams/startup_shutdown_sequence.svg)
 
 ## Sampling and storage policy
 

@@ -158,6 +158,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-141](#dc-141): CI imports the MSVC environment with `build.ps1 -MsvcEnvironment`, not the `msvc-dev-cmd` action
   - [DC-143](#dc-143): The portable zip is written by CPack from install rules that take every DLL beside `verdandi.exe`, and `build.ps1 -Package` starts the unpacked copy
   - [DC-144](#dc-144): A `v<version>` tag drafts a GitHub release in a workflow of its own, with `gh`, and the draft is published by hand
+  - [DC-145](#dc-145): The architecture diagrams are PlantUML sources, rendered to committed SVGs by a pinned PlantUML jar with Smetana and Arial
 - [Testing](#testing)
   - [DC-21](#dc-21): `test_main.cpp`: listing the tests creates no `QApplication`
   - [DC-27](#dc-27): Collectors take their OS calls as injected readers, beside pure calculation functions
@@ -1317,7 +1318,7 @@ How `verdandi.exe` starts, where its log goes, and what a second start does.
 
 ## Build and tooling
 
-`build.ps1`, formatting, the Qt build and its plugins, the version and what ships beside the executable, the benchmarks, and the coverage build.
+`build.ps1`, formatting, the Qt build and its plugins, the version and what ships beside the executable, the benchmarks, the coverage build, and the architecture diagrams.
 
 <a id="dc-23"></a>
 ### DC-23: Formatting enforced with a pinned clang-format and the existing house style
@@ -1597,6 +1598,19 @@ How `verdandi.exe` starts, where its log goes, and what a second start does.
 **Consequences:** Re-running a tag's workflow once its draft exists fails at `gh release create`, until the draft is deleted. Each release's symbols zip keeps its program database ([DC-137](#dc-137)).
 
 **History:** Packaging and distribution, the portable release (publishing it).
+
+---
+
+<a id="dc-145"></a>
+### DC-145: The architecture diagrams are PlantUML sources, rendered to committed SVGs by a pinned PlantUML jar with Smetana and Arial
+
+**Decision:** `docs/diagrams` holds each diagram's PlantUML source, which includes the shared `style.iuml`, and the SVG rendered from it, which `architecture.md` shows. `build.ps1 -Diagrams` renders them with the MIT-licensed PlantUML jar of the version pinned in the script, which it downloads to `build\tools` from PlantUML's GitHub release and checks against a pinned SHA-256, on Java 11 or later from `JAVA_HOME` or `PATH`. The style lays the class diagrams out with Smetana, PlantUML's own port of Graphviz's dot, and sets Arial.
+
+**Rationale:** PlantUML gives every diagram one style through an include file and boxes a sequence diagram's participants by thread; Mermaid, which GitHub renders from the Markdown itself, has no shared include and is laid out anew by each viewer. GitHub does not render PlantUML, so the SVGs are committed, and reading the documentation needs nothing installed. The output depends only on what is pinned: PlantUML measures text with the installed font, which Arial makes the same on every Windows, and Smetana is inside the jar, whereas Graphviz would be another install whose version changes the layout. JDK 21 and JDK 26 wrote the same bytes for every diagram. PlantUML's native Windows build, which needs no Java, crashed in Java's font manager measuring some fonts. The jar is pinned and checked as CI's actions are ([DC-121](#dc-121)), and the MIT build is the smaller, 18 MB against 30. Java is found rather than downloaded, because only editing a diagram needs it.
+
+**Consequences:** Nothing checks yet that a committed SVG matches its source. A new PlantUML version can move every diagram, so it is rendered and reviewed as a change of its own.
+
+**History:** Architecture diagrams (PlantUML), the shared style and the SVGs in `architecture.md`.
 
 ---
 

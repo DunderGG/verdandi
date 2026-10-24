@@ -164,6 +164,19 @@ PATH, then the Visual Studio LLVM tools, then %ProgramFiles%\LLVM. CI pins major
 version 22; other versions may format differently. In CI a different major
 version is an error; locally it is a warning.
 
+.PARAMETER Diagrams
+Renders each PlantUML diagram in docs\diagrams (*.puml) to an SVG beside it,
+which architecture.md shows, removes any SVG there that no diagram renders, and
+exits without building (DC-145). Run it after changing a diagram or
+docs\diagrams\style.iuml, and commit the SVGs with the sources.
+
+It runs the MIT-licensed PlantUML jar of the version pinned in this script,
+which it downloads from PlantUML's GitHub release to build\tools the first
+time, and checks against its pinned SHA-256 before each run; a jar that does
+not match is deleted. The jar needs Java 11 or later, which the script takes
+from JAVA_HOME, then PATH. A diagram with an error gets no SVG, and the script
+fails with PlantUML's message. Cannot be combined with other options.
+
 .PARAMETER MsvcEnvironment
 Imports the x64 MSVC developer environment, as every build does, and exits
 without building. In a GitHub Actions job, the script writes each environment
@@ -204,6 +217,9 @@ nothing changes. Cannot be combined with other options.
 .\scripts\build.ps1 -CheckFormat
 
 .EXAMPLE
+.\scripts\build.ps1 -Diagrams
+
+.EXAMPLE
 .\scripts\build.ps1 -MsvcEnvironment
 #>
 [CmdletBinding()]
@@ -218,6 +234,7 @@ param(
     [string]$CoverageHistoryPath = "",
     [switch]$Format,
     [switch]$CheckFormat,
+    [switch]$Diagrams,
     [switch]$MsvcEnvironment
 )
 
@@ -227,6 +244,12 @@ $ErrorActionPreference = "Stop"
 # The clang-format major version CI uses (.github/workflows/ci.yml). Different
 # major versions can format the same code differently.
 $requiredClangFormatMajorVersion = 22
+
+# The PlantUML release that renders docs\diagrams (DC-145), and the SHA-256 of
+# its MIT-licensed jar. Another version can lay the diagrams out differently,
+# so update both together and render every diagram again with -Diagrams.
+$plantUmlVersion = "1.2026.9"
+$plantUmlSha256 = "835B2F2EB1D756DA3F03BFFDBD0BAF252B4B858547A741AC8E972958A09C7F91"
 
 # Runs a native tool and fails on a non-zero exit code. In Windows PowerShell 5.1,
 # when the caller redirects stderr (2>&1, *>, CI log capture), every stderr line
@@ -343,6 +366,11 @@ if ($MsvcEnvironment -and ($Run -or $Test -or $Configure -or $Release -or $Bench
 {
     throw "-MsvcEnvironment cannot be combined with other options."
 }
+if ($Diagrams -and ($Run -or $Test -or $Configure -or $Release -or $Benchmark -or $Package -or $Coverage -or $Format -or
+        $CheckFormat -or $MsvcEnvironment))
+{
+    throw "-Diagrams cannot be combined with other options."
+}
 $preset = if ($Coverage) { "coverage" } elseif ($Release -or $Benchmark -or $Package) { "release" } else { "default" }
 $runsTests = $Test -or $Coverage
 $buildDirectory = Join-Path $projectRoot "build\$preset"
@@ -377,6 +405,10 @@ $benchmarkPaths = @(
 )
 # CPACK_PACKAGE_DIRECTORY in CMakeLists.txt.
 $packageDirectory = Join-Path $buildDirectory "package"
+# The PlantUML sources of the architecture diagrams, and the SVGs rendered from them.
+$diagramsDirectory = Join-Path $projectRoot "docs\diagrams"
+# Tools that the script downloads, such as the PlantUML jar, kept for every preset.
+$toolsDirectory = Join-Path $projectRoot "build\tools"
 
 # Refresh process PATH from User and Machine values so that any tools installed
 # by bootstrap.ps1 (such as ninja) are visible in the current session.
@@ -781,6 +813,158 @@ function Test-DesignDecisionFields
         Write-Host "All $entryCount design decision entries have their fields in order."
     }
     return $problems.Count -eq 0
+}
+
+# Finds the Java that runs PlantUML, version 11 or later: JAVA_HOME's, then the
+# first java on PATH. Prints the one it uses.
+function Find-Java
+{
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:JAVA_HOME))
+    {
+        $candidates += Join-Path $env:JAVA_HOME "bin\java.exe"
+    }
+    $command = Get-Command "java" -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $command)
+    {
+        $candidates += $command.Source
+    }
+
+    foreach ($candidate in $candidates)
+    {
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf))
+        {
+            continue
+        }
+        # From Java 9 on, --version prints to standard output, such as
+        # "openjdk 21.0.8 2025-07-15 LTS"; Java 8 does not know it and fails.
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try
+        {
+            $versionText = (& $candidate --version 2>$null | Out-String).Trim()
+        }
+        finally
+        {
+            $ErrorActionPreference = $previousPreference
+        }
+        if ($LASTEXITCODE -eq 0 -and $versionText -match "^\S+ (\d+)" -and [int]$Matches[1] -ge 11)
+        {
+            Write-Host "Using $candidate ($(($versionText -split "`r?`n")[0]))"
+            return $candidate
+        }
+        Write-Warning "$candidate is older than Java 11, which PlantUML needs."
+    }
+
+    throw ("Java 11 or later was not found through JAVA_HOME or PATH. Install a JDK, for example with " +
+        "winget install EclipseAdoptium.Temurin.21.JDK, or set JAVA_HOME to one.")
+}
+
+# Returns the path of the pinned PlantUML jar in build\tools, downloading it from
+# PlantUML's GitHub release the first time. A jar whose SHA-256 is not the pinned
+# one is deleted, never run.
+function Get-PlantUmlJar
+{
+    $jarName = "plantuml-mit-$plantUmlVersion.jar"
+    $jarPath = Join-Path $toolsDirectory $jarName
+    if (Test-Path -LiteralPath $jarPath -PathType Leaf)
+    {
+        if ((Get-FileHash -LiteralPath $jarPath -Algorithm SHA256).Hash -eq $plantUmlSha256)
+        {
+            return $jarPath
+        }
+        Write-Warning "$jarPath does not have the pinned SHA-256, so it is downloaded again."
+        Remove-Item -LiteralPath $jarPath -Force
+    }
+
+    New-Item -ItemType Directory -Force -Path $toolsDirectory | Out-Null
+    $url = "https://github.com/plantuml/plantuml/releases/download/v$plantUmlVersion/$jarName"
+    $downloadPath = "$jarPath.download"
+    Write-Host "Downloading $url"
+    # GitHub needs TLS 1.2, which Windows PowerShell does not always offer by
+    # default, and its progress bar slows a download many times over.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor
+        [Net.SecurityProtocolType]::Tls12
+    $previousProgressPreference = $ProgressPreference
+    $ProgressPreference = "SilentlyContinue"
+    try
+    {
+        Invoke-WebRequest -Uri $url -OutFile $downloadPath -UseBasicParsing
+    }
+    finally
+    {
+        $ProgressPreference = $previousProgressPreference
+    }
+
+    $hash = (Get-FileHash -LiteralPath $downloadPath -Algorithm SHA256).Hash
+    if ($hash -ne $plantUmlSha256)
+    {
+        Remove-Item -LiteralPath $downloadPath -Force
+        throw "The downloaded $jarName has the SHA-256 $hash, not the pinned $plantUmlSha256, so it was deleted."
+    }
+    Move-Item -LiteralPath $downloadPath -Destination $jarPath
+    return $jarPath
+}
+
+# Renders every docs\diagrams\*.puml to an SVG in OutputDirectory, named after
+# the source as its @startuml line names it (DC-145). A diagram with an error
+# gets no SVG, and PlantUML's exit code fails the script.
+function Invoke-PlantUml
+{
+    param(
+        [Parameter(Mandatory)][System.IO.FileInfo[]]$Sources,
+        [Parameter(Mandatory)][string]$OutputDirectory
+    )
+
+    $java = Find-Java
+    $jarPath = Get-PlantUmlJar
+    New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+    # The sources are UTF-8, which Java before 18 does not assume on Windows.
+    $arguments = @("-Djava.awt.headless=true", "-jar", $jarPath, "--svg", "--charset", "UTF-8", "--no-error-image",
+        "--output-dir", $OutputDirectory) + @($Sources | ForEach-Object { $_.FullName })
+    Invoke-NativeCommand -Description "PlantUML" -FilePath $java -Arguments $arguments | Out-Host
+
+    foreach ($source in $Sources)
+    {
+        $svgName = [System.IO.Path]::ChangeExtension($source.Name, ".svg")
+        if (-not (Test-Path -LiteralPath (Join-Path $OutputDirectory $svgName) -PathType Leaf))
+        {
+            throw ("docs\diagrams\$($source.Name) rendered no $svgName. Name the diagram after its file: " +
+                "@startuml $($source.BaseName)")
+        }
+    }
+}
+
+# Returns the diagrams' sources, docs\diagrams\*.puml, in name order.
+function Get-DiagramSources
+{
+    $sources = @(Get-ChildItem -LiteralPath $diagramsDirectory -Filter "*.puml" -File | Sort-Object Name)
+    if ($sources.Count -eq 0)
+    {
+        throw "docs\diagrams holds no .puml file."
+    }
+    return $sources
+}
+
+# Rendering the diagrams needs Java and PlantUML, but neither vcpkg nor the
+# MSVC environment, so it runs first and exits.
+if ($Diagrams)
+{
+    $sources = Get-DiagramSources
+    Invoke-PlantUml -Sources $sources -OutputDirectory $diagramsDirectory
+
+    # An SVG that no source renders is left from a diagram renamed or removed.
+    $sourceNames = @($sources | ForEach-Object { $_.BaseName })
+    foreach ($svg in @(Get-ChildItem -LiteralPath $diagramsDirectory -Filter "*.svg" -File))
+    {
+        if ($sourceNames -notcontains $svg.BaseName)
+        {
+            Remove-Item -LiteralPath $svg.FullName
+            Write-Host "Removed docs\diagrams\$($svg.Name), which no diagram renders."
+        }
+    }
+    Write-Host "Rendered $($sources.Count) diagrams in docs\diagrams with PlantUML $plantUmlVersion."
+    return
 }
 
 if ($Format -and $CheckFormat)

@@ -8,7 +8,7 @@
 
 ' Smetana, the port of Graphviz's dot that PlantUML carries, lays out the
 ' class diagrams. They then need no Graphviz installation, whose version
-' would change the layout.
+' would change the layout (DC-145).
 !pragma layout smetana
 
 ' Each module and each thread has a colour, which every diagram gives it:

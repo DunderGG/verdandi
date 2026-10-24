@@ -536,7 +536,7 @@ Each action needs an access right beyond `PROCESS_QUERY_LIMITED_INFORMATION`, so
 - [x] Sequence diagram for the main data-flow path: scheduler tick → fast collectors → snapshot assembly → Qt queued signal → view model update. `tick_sequence.puml` also shows the pause while the system sleeps and the snapshot discarded after a resume.
 - [x] Sequence diagram for slow-collector integration: process enumeration thread → mutex-protected merge → snapshot assembly. `slow_collector_sequence.puml` also shows how a connectivity notification and the network-name worker wake the slow-collector thread to collect only connectivity and the network names.
 - [x] Sequence diagram for application startup and shutdown (thread lifecycle, `std::stop_token` cancellation). `startup_shutdown_sequence.puml` follows `main()` from the instance mutex to `spdlog::shutdown()`, with the network-name worker and the notification subscriptions as well as the scheduler's two threads.
-- [ ] 🔵 Generate SVG output from `.puml` sources and embed the rendered diagrams in `docs/architecture.md`.
+- [x] Generate SVG output from `.puml` sources and embed the rendered diagrams in `docs/architecture.md`. `.\scripts\build.ps1 -Diagrams` renders each source to an SVG beside it with the PlantUML jar of a pinned version and SHA-256, on Java 11 or later, and the SVGs are committed ([DC-145](docs/design_decisions.md#dc-145)).
 - [ ] 🔵 Add a CI step that runs PlantUML on every `.puml` file and fails the build if the generated SVGs are out of date.
 
 ### Code organization
