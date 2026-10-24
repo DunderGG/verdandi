@@ -18,7 +18,7 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 # The version, description, homepage and copyright, as macros in
 # verdandi_version.h, which C++ code and resource scripts include through the
 # verdandi_version target (DC-136). Raise the version here and in vcpkg.json
-# together (DC-133).
+# together, as the Release workflow checks (DC-144).
 set(VERDANDI_COPYRIGHT "Copyright (C) 2026 David Bennehag")
 configure_file(cmake/verdandi_version.h.in "${PROJECT_BINARY_DIR}/generated/verdandi_version.h" @ONLY)
 add_library(verdandi_version INTERFACE)

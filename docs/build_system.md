@@ -389,7 +389,8 @@ that the first restored or built ([DC-139](design_decisions.md#dc-139)).
 After the Release tests, its `Package (Release)` step runs
 `.\scripts\build.ps1 -Package`, so that a change that breaks the portable zip
 fails the job ([DC-143](design_decisions.md#dc-143)); the script configures
-once more, because it finds no stamp of its own. Its
+once more, because it finds no stamp of its own, and in CI run 38 the step
+took 8 seconds. Its
 `Set up MSVC` step runs `.\scripts\build.ps1 -MsvcEnvironment`, which imports
 the x64 MSVC environment as every build of the script does and writes each
 variable that the import set or changed to `GITHUB_ENV`, so that the steps
@@ -473,7 +474,10 @@ step, the only one given the token, runs `gh release create` with `--draft`,
 named `Verdandi <version>`; publish it from the repository's Releases page.
 Run by hand on a branch, the job stops before that step, so it tries the
 workflow without drafting anything. A re-run once the draft exists fails at
-that step, until the draft is deleted.
+that step, until the draft is deleted. Its first two runs, on 2026-10-24,
+restored the vcpkg cache in 5 seconds. Run 1, by hand on `main`, took 4.5
+minutes, and run 2, for the tag `v0.1.0`, which drafted the first release,
+took 6.5, 5.5 of them in `build.ps1 -Test -Package`.
 
 A separate `Format Check` job installs clang-format 22.1.3 from PyPI and runs
 `.\scripts\build.ps1 -CheckFormat`, which fails if any C++ source or header

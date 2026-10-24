@@ -34,8 +34,8 @@ jobs:
           persist-credentials: false
 
       # The tag names the version that project() holds, which vcpkg.json
-      # repeats (DC-133), so that the zip's name and the program's version
-      # information give the release's version.
+      # repeats, so that the zip's name and the program's version information
+      # give the release's version (DC-144).
       - name: Check the version
         env:
           REF_TYPE: ${{ github.ref_type }}

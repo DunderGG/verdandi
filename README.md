@@ -4,7 +4,7 @@
 
 [![CI][ci-badge]][ci]
 [![Coverage][coverage-badge]][coverage]
-[![Version][version-badge]][roadmap]
+[![Release][release-badge]][release]
 [![License: GPL-3.0][license-badge]](LICENSE)
 [![Platform: Windows 10 | 11][platform-badge]](#-prerequisites)
 [![C++20][cpp-badge]](docs/architecture.md)
@@ -16,8 +16,8 @@
 [ci]: https://github.com/DunderGG/verdandi/actions/workflows/ci.yml?query=branch%3Amain
 [coverage-badge]: https://img.shields.io/endpoint?url=https%3A%2F%2Fdundergg.github.io%2Fverdandi%2Fcoverage_badge.json
 [coverage]: https://dundergg.github.io/verdandi/
-[version-badge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FDunderGG%2Fverdandi%2Fmain%2Fvcpkg.json&query=%24%5B%27version-string%27%5D&label=version&prefix=v&color=blue
-[roadmap]: roadmap.md
+[release-badge]: https://img.shields.io/github/v/release/DunderGG/verdandi
+[release]: https://github.com/DunderGG/verdandi/releases/latest
 [license-badge]: https://img.shields.io/github/license/DunderGG/verdandi
 [platform-badge]: https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6
 [cpp-badge]: https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white
@@ -40,11 +40,20 @@ Built with C++20, Qt 6, and direct Windows APIs for accurate, low-overhead monit
 
 *Screenshots coming soon — the application is under active development.*
 
+## ⬇️ Download
+
+Download `Verdandi-<version>-x64.zip` from the [latest release](https://github.com/DunderGG/verdandi/releases/latest), unzip it into a folder you can write to, such as your Desktop or Documents, and run `verdandi.exe`. It needs Windows 10 or 11, 64-bit, and nothing else: no installer, no administrator rights and no runtime to install.
+
+- **Portable:** Verdandi keeps its settings and its log in its own folder, beside `verdandi.exe`, so deleting the folder removes it. To update, unzip the new version into a folder of its own and copy your `settings.json` across.
+- **Windows SmartScreen** may say "Windows protected your PC", because the releases are not code-signed yet. Click **More info**, then **Run anyway**.
+- **Checksums:** each release's `SHA256SUMS.txt` holds the SHA-256 of its zips. Compare them with the output of `Get-FileHash .\Verdandi-<version>-x64.zip` in PowerShell.
+- The release's `-symbols.zip` holds the program database, which is needed only to analyze crash reports.
+
 ## ⚙️ Settings, log and command line
 
-- **Settings** are saved to `%APPDATA%\Verdandi\settings.json` whenever you change them in File > Settings. Without the file, Verdandi starts with the defaults.
-- **The log** is written to `%LOCALAPPDATA%\Verdandi\verdandi.log`, and rotated at 5 MB.
-- **In portable mode**, when a `settings.json` lies beside `verdandi.exe`, as in the portable zip, Verdandi keeps its settings and its log in that folder instead, and writes nothing to your user folders. Delete that `settings.json` to use them again, or copy yours from `%APPDATA%\Verdandi` beside `verdandi.exe` to take your settings along. When you update, unzip the new version into a folder of its own and copy your `settings.json` across.
+- **Settings** are saved to `settings.json` whenever you change them in File > Settings. Without the file, Verdandi starts with the defaults.
+- **The log** is written to `verdandi.log`, and rotated at 5 MB.
+- **Where they are kept:** while a `settings.json` lies beside `verdandi.exe`, as in the release's zip, Verdandi is portable: it keeps both files in that folder and writes nothing to your user folders. Otherwise, as in a build from source, they are in `%APPDATA%\Verdandi` and `%LOCALAPPDATA%\Verdandi`. Delete the `settings.json` beside `verdandi.exe` to use your user folders, or copy yours from `%APPDATA%\Verdandi` beside `verdandi.exe` to take your settings along.
 - **`--log-level <level>`** logs at `trace`, `debug`, `info`, `warn`, `error`, `critical` or `off` for one run, in place of the level in the settings, without saving it. While Verdandi runs, a new start brings its window to the front and does not use the option.
 - **`--version`** shows the version and the commit it was built from, as Help > About Verdandi does.
 

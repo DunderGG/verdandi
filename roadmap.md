@@ -503,7 +503,7 @@ Each action needs an access right beyond `PROCESS_QUERY_LIMITED_INFORMATION`, so
 
 > *Seen in: Process Explorer and System Informer (portable, no installation), winget.*
 
-- [ ] 🔴 Publish a portable release: a zip that runs without installation, and a portable mode that keeps the settings next to the executable.
+- [x] Publish a portable release: a zip that runs without installation, and a portable mode that keeps the settings next to the executable.
 
   - [x] Write the zip. `.\scripts\build.ps1 -Package` has CPack write `Verdandi-<version>-x64.zip`, which holds `verdandi.exe` with the Qt DLLs and plugins beside it ([DC-104](docs/design_decisions.md#dc-104)), the C++ runtime, `LICENSE.txt` and `THIRD_PARTY_NOTICES.txt` ([DC-137](docs/design_decisions.md#dc-137), [DC-138](docs/design_decisions.md#dc-138)) in a folder of the same name, and puts `verdandi.pdb` in a zip of its own. It then starts the unpacked copy with nothing of the build on `PATH`, and CI's `Build and Test` job runs it ([DC-143](docs/design_decisions.md#dc-143)).
 
@@ -511,7 +511,7 @@ Each action needs an access right beyond `PROCESS_QUERY_LIMITED_INFORMATION`, so
 
   - [x] Draft releases from a tag. The `Release` workflow runs on a `v*` tag, checks that the tag names the version in `project()` and `vcpkg.json`, builds, tests and packages Release, and drafts a GitHub release with both zips and `SHA256SUMS.txt`, which keeps each published build's `verdandi.pdb` to symbolize its crash dumps ([DC-144](docs/design_decisions.md#dc-144)). Run by hand on a branch, it uploads the zips as an artifact and drafts nothing. CONTRIBUTING.md says how to release.
 
-  - [ ] Publish the first release. Run the `Release` workflow by hand on `main` and try its artifact's zip on a PC without a build environment. Then tag `v0.1.0` as CONTRIBUTING.md says, check the workflow's first tag run and its draft, and publish the draft. Then record in build_system.md how long the job took, and add the release badge and the README's download section ([General](#general)).
+  - [x] Publish the first release. The `Release` workflow's first run, by hand on `main` at `a942247`, gave a zip that ran on another PC without a build environment. The tag `v0.1.0`, at `221276e`, which adds `/PDBALTPATH` ([DC-137](docs/design_decisions.md#dc-137)), drafted Verdandi 0.1.0, published on 2026-10-24 as the latest release. build_system.md records both runs' times, and the README has the release badge and a download section ([General](#general)).
 - [ ] 🟡 Sign the release binaries in CI, as architecture.md's antivirus section asks, and publish a winget manifest.
 - [ ] 🟢 Add an Arm64 build (Process Explorer ships one). It needs the vcpkg `arm64-windows` triplet and a check of the structures `platform/windows` declares itself.
 
@@ -536,7 +536,7 @@ Each action needs an access right beyond `PROCESS_QUERY_LIMITED_INFORMATION`, so
 ### General
 > Whatever does not fit into the above categories
 
-- [ ] 🔴 Add a Release badge when we have released a first release. Also update the README with a download section.
+- [x] Add a Release badge once the first release is out, and a download section to the README. The release badge replaces the version badge, which read `vcpkg.json` on `main` while there was no release ([DC-133](docs/design_decisions.md#dc-133)).
 - [ ] 🟢 Simplify the "Building from source".
 - [x] Draw the application icon.
 - [x] Rename the application to Verdandi, and give the executable and its windows the icon and the new title.
