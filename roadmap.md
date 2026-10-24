@@ -531,7 +531,7 @@ Each action needs an access right beyond `PROCESS_QUERY_LIMITED_INFORMATION`, so
 
 ### Architecture diagrams (PlantUML)
 
-- [ ] 🔵 Add `docs/diagrams/` directory with a shared PlantUML skin/style file for visual consistency.
+- [x] Add `docs/diagrams/` directory with a shared PlantUML skin/style file for visual consistency. Every diagram includes `docs/diagrams/style.iuml`, which gives it the font, Arial, a colour for each module and each thread, and Smetana, the layout engine inside PlantUML, so that no Graphviz is needed.
 - [ ] 🔵 Class diagrams covering the key module boundaries: `domain` types, `monitoring` interfaces and scheduler, `platform/windows` adapters, `ui` view models.
 - [ ] 🔵 Sequence diagram for the main data-flow path: scheduler tick → fast collectors → snapshot assembly → Qt queued signal → view model update.
 - [ ] 🔵 Sequence diagram for slow-collector integration: process enumeration thread → mutex-protected merge → snapshot assembly.

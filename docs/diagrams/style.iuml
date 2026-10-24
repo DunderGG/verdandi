@@ -1,0 +1,78 @@
+' The shared style of Verdandi's architecture diagrams. Every diagram in this
+' directory includes it on the line after @startuml:
+'
+'     !include style.iuml
+'
+' so that the diagrams share their fonts, colours and layout engine, and a
+' change here restyles them all.
+
+' Smetana, the port of Graphviz's dot that PlantUML carries, lays out the
+' class diagrams. They then need no Graphviz installation, whose version
+' would change the layout.
+!pragma layout smetana
+
+' Each module and each thread has a colour, which every diagram gives it:
+' a package of a class diagram takes its module's, and a box of a sequence
+' diagram its thread's.
+!$APP_COLOR = "#EDE7F6"
+!$DOMAIN_COLOR = "#FFF8E1"
+!$MONITORING_COLOR = "#E3F2FD"
+!$PERSISTENCE_COLOR = "#ECEFF1"
+!$PLATFORM_COLOR = "#FBE9E7"
+!$UI_COLOR = "#E8F5E9"
+!$EXTERNAL_COLOR = "#F5F5F5"
+
+!$UI_THREAD_COLOR = $UI_COLOR
+!$TICK_THREAD_COLOR = $MONITORING_COLOR
+!$SLOW_THREAD_COLOR = "#E0F7FA"
+!$WORKER_THREAD_COLOR = "#FFF3E0"
+!$OS_THREAD_COLOR = $PLATFORM_COLOR
+
+' Arial, which every Windows has, so that the text measures the same on
+' every machine that renders the diagrams. PlantUML measures text with the
+' installed font, and its measurements place everything else.
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundCorner 6
+skinparam ArrowColor #37474F
+skinparam ArrowFontSize 11
+skinparam TitleFontSize 15
+skinparam TitleFontStyle bold
+skinparam NoteBackgroundColor #FFFDE7
+skinparam NoteBorderColor #BDB76B
+skinparam NoteFontSize 11
+
+' Class diagrams: members without visibility icons, since a diagram shows
+' only the members that cross a boundary, and no empty compartments. The
+' letter before a name tells a class (C), an interface (I), a struct (S)
+' and an enum (E) apart.
+skinparam ClassBackgroundColor #FFFFFF
+skinparam ClassBorderColor #455A64
+skinparam ClassAttributeIconSize 0
+skinparam ClassFontStyle bold
+skinparam PackageBorderColor #78909C
+skinparam PackageFontStyle bold
+skinparam PackageStyle rectangle
+skinparam StereotypeCBackgroundColor #B3E5FC
+skinparam StereotypeIBackgroundColor #C8E6C9
+skinparam StereotypeEBackgroundColor #F8BBD0
+hide empty members
+
+' Sequence diagrams: each participant drawn once, at the top, and replies
+' written above their arrows.
+skinparam ParticipantBackgroundColor #FFFFFF
+skinparam ParticipantBorderColor #455A64
+skinparam CollectionsBackgroundColor #FFFFFF
+skinparam CollectionsBorderColor #455A64
+skinparam DatabaseBackgroundColor #FFFFFF
+skinparam DatabaseBorderColor #455A64
+skinparam SequenceLifeLineBorderColor #90A4AE
+skinparam SequenceBoxBorderColor #90A4AE
+skinparam SequenceGroupBorderColor #78909C
+skinparam SequenceGroupHeaderFontStyle bold
+skinparam SequenceDividerBackgroundColor #ECEFF1
+skinparam SequenceMessageAlign left
+skinparam MaxMessageSize 260
+hide footbox
