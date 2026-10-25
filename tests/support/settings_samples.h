@@ -27,6 +27,7 @@ namespace verdandi::tests
         .refreshInterval = std::chrono::milliseconds{2500},
         .displayUnits = {.bytes = domain::ByteUnits::Decimal, .networkRates = domain::NetworkRateUnits::BitsPerSecond},
         .dashboardPanels = {.cpu = false, .memory = false, .disk = false, .network = false, .uptime = false},
+        .colorScheme = domain::ColorScheme::Dark,
         .logLevel = domain::LogLevel::Debug,
     };
 }

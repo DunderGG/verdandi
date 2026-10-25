@@ -31,6 +31,7 @@ constexpr std::string_view kDisplayUnitsKey = "displayUnits";
 constexpr std::string_view kBytesKey = "bytes";
 constexpr std::string_view kNetworkRatesKey = "networkRates";
 constexpr std::string_view kDashboardPanelsKey = "dashboardPanels";
+constexpr std::string_view kColorSchemeKey = "colorScheme";
 constexpr std::string_view kLogLevelKey = "logLevel";
 
 // Appended to the settings file's name for the file that a save writes first.
@@ -51,6 +52,12 @@ constexpr std::array kByteUnitsNames{
 constexpr std::array kNetworkRateUnitsNames{
     NamedValue<domain::NetworkRateUnits>{"bytesPerSecond", domain::NetworkRateUnits::BytesPerSecond},
     NamedValue<domain::NetworkRateUnits>{"bitsPerSecond", domain::NetworkRateUnits::BitsPerSecond},
+};
+
+constexpr std::array kColorSchemeNames{
+    NamedValue<domain::ColorScheme>{"system", domain::ColorScheme::System},
+    NamedValue<domain::ColorScheme>{"light", domain::ColorScheme::Light},
+    NamedValue<domain::ColorScheme>{"dark", domain::ColorScheme::Dark},
 };
 
 // The levels' names, which the --log-level option gives them too.
@@ -337,6 +344,7 @@ std::string serializeSettings(const domain::Settings& settings)
     document[kRefreshIntervalKey] = settings.refreshInterval.count();
     document[kDisplayUnitsKey] = std::move(displayUnits);
     document[kDashboardPanelsKey] = std::move(dashboardPanels);
+    document[kColorSchemeKey] = nameOf(settings.colorScheme, kColorSchemeNames);
     document[kLogLevelKey] = nameOf(settings.logLevel, kLogLevelNames);
     return document.dump(4) + "\n";
 }
@@ -363,6 +371,8 @@ SettingsReadResult parseSettings(std::string_view text)
             readDisplayUnits(value, settings.displayUnits, result.problems);
         } else if (key == kDashboardPanelsKey) {
             readDashboardPanels(value, settings.dashboardPanels, result.problems);
+        } else if (key == kColorSchemeKey) {
+            readName(value, kColorSchemeKey, kColorSchemeNames, settings.colorScheme, result.problems);
         } else if (key == kLogLevelKey) {
             readName(value, kLogLevelKey, kLogLevelNames, settings.logLevel, result.problems);
         } else {

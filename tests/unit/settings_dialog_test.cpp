@@ -48,6 +48,7 @@ TEST(SettingsDialog, Construction_ControlsShowTheSettings)
 
     EXPECT_DOUBLE_EQ(dialog.refreshIntervalSpinBox()->value(), 2.5);
     EXPECT_EQ(selectedItem<LogLevel>(dialog.logLevelComboBox()), LogLevel::Debug);
+    EXPECT_EQ(selectedItem<ColorScheme>(dialog.colorSchemeComboBox()), ColorScheme::Dark);
     EXPECT_EQ(selectedItem<ByteUnits>(dialog.byteUnitsComboBox()), ByteUnits::Decimal);
     EXPECT_EQ(selectedItem<NetworkRateUnits>(dialog.networkRateUnitsComboBox()), NetworkRateUnits::BitsPerSecond);
     EXPECT_FALSE(dialog.cpuPanelCheckBox()->isChecked());
@@ -63,6 +64,7 @@ TEST(SettingsDialog, ControlsEdited_SettingsReturnsWhatTheyShow)
 
     dialog.refreshIntervalSpinBox()->setValue(2.5);
     selectItem(dialog.logLevelComboBox(), LogLevel::Debug);
+    selectItem(dialog.colorSchemeComboBox(), ColorScheme::Dark);
     selectItem(dialog.byteUnitsComboBox(), ByteUnits::Decimal);
     selectItem(dialog.networkRateUnitsComboBox(), NetworkRateUnits::BitsPerSecond);
     dialog.cpuPanelCheckBox()->setChecked(false);
@@ -74,7 +76,7 @@ TEST(SettingsDialog, ControlsEdited_SettingsReturnsWhatTheyShow)
     EXPECT_EQ(dialog.settings(), nonDefaultSettings());
 }
 
-TEST(SettingsDialog, SetSettings_EachLogLevelAndUnit_SettingsReturnsIt)
+TEST(SettingsDialog, SetSettings_EachLogLevelColorSchemeAndUnit_SettingsReturnsIt)
 {
     struct Case
     {
@@ -89,6 +91,9 @@ TEST(SettingsDialog, SetSettings_EachLogLevelAndUnit_SettingsReturnsIt)
         Case{"Error", {.logLevel = LogLevel::Error}},
         Case{"Critical", {.logLevel = LogLevel::Critical}},
         Case{"Off", {.logLevel = LogLevel::Off}},
+        Case{"System", {.colorScheme = ColorScheme::System}},
+        Case{"Light", {.colorScheme = ColorScheme::Light}},
+        Case{"Dark", {.colorScheme = ColorScheme::Dark}},
         Case{"Binary", {.displayUnits = {.bytes = ByteUnits::Binary}}},
         Case{"Decimal", {.displayUnits = {.bytes = ByteUnits::Decimal}}},
         Case{"BytesPerSecond", {.displayUnits = {.networkRates = NetworkRateUnits::BytesPerSecond}}},
@@ -103,6 +108,7 @@ TEST(SettingsDialog, SetSettings_EachLogLevelAndUnit_SettingsReturnsIt)
         EXPECT_EQ(dialog.settings(), settings);
         // A value without an item would leave the combo box with none selected.
         EXPECT_NE(dialog.logLevelComboBox()->currentIndex(), -1);
+        EXPECT_NE(dialog.colorSchemeComboBox()->currentIndex(), -1);
         EXPECT_NE(dialog.byteUnitsComboBox()->currentIndex(), -1);
         EXPECT_NE(dialog.networkRateUnitsComboBox()->currentIndex(), -1);
     }

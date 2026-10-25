@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QString>
 
+#include "domain/settings.h"
+
 namespace verdandi::ui
 {
 
@@ -15,6 +17,11 @@ namespace verdandi::ui
  * windows' title bars follow it. The scheme is Qt::ColorScheme::Light or
  * Dark, or Unknown while a Windows contrast theme is on, whose own colours
  * then replace both.
+ *
+ * The settings can choose light or dark whatever Windows sets (DC-149):
+ * setSettings() asks Qt for that scheme, which Qt then draws in as if Windows
+ * had set it, until the settings choose Windows' scheme again or the
+ * controller is destroyed. A contrast theme still replaces it.
  *
  * Qt's windowsvista style, which it picks on Windows 10, draws only the light
  * scheme. While the scheme is dark, the controller replaces it with Fusion,
@@ -41,6 +48,13 @@ public:
     /** Returns the scheme that the application draws in now. */
     [[nodiscard]] Qt::ColorScheme colorScheme() const;
 
+    /**
+     * Draws the application in the colour scheme that settings choose. Asks
+     * Qt only when the choice differs from the previous settings', since Qt
+     * then gives every widget its style again. Windows' scheme until set.
+     */
+    void setSettings(const domain::Settings& settings);
+
 signals:
     /** Emitted with the new scheme when the scheme that the application draws in changes. */
     void colorSchemeChanged(Qt::ColorScheme scheme);
@@ -54,6 +68,7 @@ private:
 
     // The name of the style that Fusion replaces while the scheme is dark; empty while none is replaced.
     QString m_replacedStyle;
+    domain::ColorScheme m_colorSchemeSetting{domain::ColorScheme::System};
 };
 
 /**

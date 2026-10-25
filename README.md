@@ -34,7 +34,8 @@ Built with C++20, Qt 6, and direct Windows APIs for accurate, low-overhead monit
 - **Processes** — Sortable process list with CPU, memory, I/O rate, threads, and handles. Filter by name or PID, or show each process under its parent as a tree. New processes are highlighted, and ended ones are marked before they disappear.
 - **Network view** — Each adapter's type, status, link speed, IPv4 and IPv6 addresses, DNS servers, network name and category, with live send and receive charts. Connectivity level, metered and roaming status update as soon as Windows reports a change. "Show all adapters" also lists the adapters Windows hides.
 - **Process management** — End a process after confirming. Only your own processes that are not elevated can be ended.
-- **Settings** — Set the refresh interval (0.5 to 10 seconds), byte units (KiB or KB), network throughput in bytes or bits per second, the dashboard's cards, and the log level from File > Settings. Changes apply at once and are saved.
+- **Light and dark** — Follows Windows' light or dark mode, also when it changes, or stays light or dark whatever Windows uses. Windows' contrast themes keep their own colours.
+- **Settings** — Set the refresh interval (0.5 to 10 seconds), the colour scheme, byte units (KiB or KB), network throughput in bytes or bits per second, the dashboard's cards, and the log level from File > Settings. Changes apply at once and are saved.
 - **Sleep and resume** — After the PC wakes up, rates start again from fresh readings instead of averaging over the time it slept.
 - **One window** — Starting Verdandi while it runs brings its window to the front, restored if it was minimized, instead of opening a second one.
 
@@ -117,7 +118,6 @@ See [architecture.md](docs/architecture.md) for the full technical design, inclu
 See [roadmap.md](roadmap.md) for the detailed implementation plan. Upcoming features include:
 
 - System tray integration
-- Dark mode support
 - Alert rules and notifications
 - GPU monitoring
 - ETW-powered diagnostics

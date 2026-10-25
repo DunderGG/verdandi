@@ -16,8 +16,8 @@ namespace verdandi::ui
 
 /**
  * Settings dialog: edits a copy of the user's preferences (DC-124). It shows
- * the refresh interval in seconds, the log level, the byte and network
- * throughput units, and a check box for each dashboard card. OK accepts,
+ * the refresh interval in seconds, the log level, the colour scheme, the byte
+ * and network throughput units, and a check box for each dashboard card. OK accepts,
  * Cancel and Escape reject, and Restore Defaults sets every control to the
  * defaults without closing the dialog. The dialog changes nothing itself:
  * whoever opened it reads settings() once it is accepted.
@@ -46,6 +46,7 @@ public:
 
     [[nodiscard]] QDoubleSpinBox* refreshIntervalSpinBox() const;
     [[nodiscard]] QComboBox* logLevelComboBox() const;
+    [[nodiscard]] QComboBox* colorSchemeComboBox() const;
     [[nodiscard]] QComboBox* byteUnitsComboBox() const;
     [[nodiscard]] QComboBox* networkRateUnitsComboBox() const;
     [[nodiscard]] QCheckBox* cpuPanelCheckBox() const;
@@ -61,6 +62,7 @@ private:
 
     QDoubleSpinBox* m_refreshIntervalSpinBox{nullptr};
     QComboBox* m_logLevelComboBox{nullptr};
+    QComboBox* m_colorSchemeComboBox{nullptr};
     QComboBox* m_byteUnitsComboBox{nullptr};
     QComboBox* m_networkRateUnitsComboBox{nullptr};
     QCheckBox* m_cpuPanelCheckBox{nullptr};

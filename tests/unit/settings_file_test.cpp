@@ -51,6 +51,9 @@ std::vector<NamedValueCase> namedValueCases()
          Settings{.displayUnits = {.networkRates = NetworkRateUnits::BytesPerSecond}}},
         {"network rates in bits", R"({"displayUnits": {"networkRates": "bitsPerSecond"}})",
          Settings{.displayUnits = {.networkRates = NetworkRateUnits::BitsPerSecond}}},
+        {"Windows' colour scheme", R"({"colorScheme": "system"})", Settings{.colorScheme = ColorScheme::System}},
+        {"light colour scheme", R"({"colorScheme": "light"})", Settings{.colorScheme = ColorScheme::Light}},
+        {"dark colour scheme", R"({"colorScheme": "dark"})", Settings{.colorScheme = ColorScheme::Dark}},
         {"a log level", R"({"logLevel": "critical"})", Settings{.logLevel = LogLevel::Critical}},
     };
 }
@@ -78,6 +81,7 @@ TEST(SettingsFile, SerializeSettings_Defaults_WritesTheFileFormat)
         "network": true,
         "uptime": true
     },
+    "colorScheme": "system",
     "logLevel": "info"
 }
 )";
@@ -185,6 +189,9 @@ TEST(SettingsFile, ParseSettings_InvalidValue_KeepsItsDefaultAndIsReported)
         {"panels as a list", R"({"dashboardPanels": ["cpu"]})", "dashboardPanels"},
         {"panel as a number", R"({"dashboardPanels": {"cpu": 0}})", "dashboardPanels.cpu"},
         {"panel as text", R"({"dashboardPanels": {"cpu": "false"}})", "dashboardPanels.cpu"},
+        {"unknown colour scheme", R"({"colorScheme": "auto"})", "colorScheme"},
+        {"colour scheme in another case", R"({"colorScheme": "Dark"})", "colorScheme"},
+        {"colour scheme as a boolean", R"({"colorScheme": true})", "colorScheme"},
         {"unknown log level", R"({"logLevel": "verbose"})", "logLevel"},
         {"log level in another case", R"({"logLevel": "Debug"})", "logLevel"},
         {"log level as a number", R"({"logLevel": 1})", "logLevel"},

@@ -110,6 +110,7 @@ package "domain" $DOMAIN_COLOR {
         refreshInterval : milliseconds
         displayUnits : DisplayUnits
         dashboardPanels : DashboardPanels
+        colorScheme : ColorScheme
         logLevel : LogLevel
     }
 

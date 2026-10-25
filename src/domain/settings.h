@@ -53,6 +53,19 @@ struct DashboardPanels
     bool operator==(const DashboardPanels&) const = default;
 };
 
+/**
+ * The colour scheme the monitor draws in (DC-149). A Windows contrast theme
+ * replaces any of them.
+ * System — the one Windows sets for applications, and each one it changes to.
+ * Light, Dark — that scheme, whatever Windows sets.
+ */
+enum class ColorScheme
+{
+    System,
+    Light,
+    Dark,
+};
+
 /** The least severe level of message that the log keeps. Off keeps none. */
 enum class LogLevel
 {
@@ -133,6 +146,7 @@ struct Settings
     std::chrono::milliseconds refreshInterval{kDefaultRefreshInterval};
     DisplayUnits displayUnits{};
     DashboardPanels dashboardPanels{};
+    ColorScheme colorScheme{ColorScheme::System};
     LogLevel logLevel{LogLevel::Info};
 
     bool operator==(const Settings&) const = default;

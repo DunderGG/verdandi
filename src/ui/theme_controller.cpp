@@ -40,12 +40,38 @@ ThemeController::ThemeController(QObject* parent) : QObject(parent)
 
 ThemeController::~ThemeController()
 {
+    // Gives back Windows' scheme without following it, and without saying so.
+    disconnect(QGuiApplication::styleHints(), nullptr, this, nullptr);
+    if (m_colorSchemeSetting != domain::ColorScheme::System) {
+        QGuiApplication::styleHints()->unsetColorScheme();
+    }
     restoreStyle();
 }
 
 Qt::ColorScheme ThemeController::colorScheme() const
 {
     return QGuiApplication::styleHints()->colorScheme();
+}
+
+void ThemeController::setSettings(const domain::Settings& settings)
+{
+    if (settings.colorScheme == m_colorSchemeSetting) {
+        return;
+    }
+    m_colorSchemeSetting = settings.colorScheme;
+    // Qt emits colorSchemeChanged() at once if the scheme it draws in changes.
+    switch (settings.colorScheme) {
+        case domain::ColorScheme::Light:
+            QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Light);
+            break;
+        case domain::ColorScheme::Dark:
+            QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+            break;
+        case domain::ColorScheme::System:
+        default:
+            QGuiApplication::styleHints()->unsetColorScheme();
+            break;
+    }
 }
 
 void ThemeController::applyColorScheme(Qt::ColorScheme scheme)

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -45,6 +46,16 @@ QString logLevelNameList()
     return list;
 }
 
+// Says, for the log, where the scheme that the application draws in comes
+// from: Windows, or setting, the settings' colour scheme.
+std::string_view colorSchemeOrigin(Qt::ColorScheme scheme, verdandi::domain::ColorScheme setting)
+{
+    if (scheme == Qt::ColorScheme::Unknown) {
+        return "which Windows sets in place of any colour scheme";
+    }
+    return setting == verdandi::domain::ColorScheme::System ? "which Windows sets" : "which the settings choose";
+}
+
 // Returns a path that Qt gives, with forward slashes, with the backslashes
 // that the log and the message boxes show.
 std::filesystem::path nativePath(const QString& path)
@@ -72,10 +83,13 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
     application.installNativeEventFilter(&powerEventFilter);
 
     // Qt reads the colour scheme that Windows sets for applications when the
-    // QApplication starts, and follows it (DC-147). Declared before the
-    // window, so that it outlives it.
+    // QApplication starts, and follows it, unless the settings choose light
+    // or dark (DC-147, DC-149). Declared before the window, so that it
+    // outlives it, and set before the window is created.
     verdandi::ui::ThemeController themeController;
-    spdlog::info("Drawing in {}, which Windows sets", verdandi::ui::colorSchemeName(themeController.colorScheme()));
+    themeController.setSettings(settings);
+    spdlog::info("Drawing in {}, {}", verdandi::ui::colorSchemeName(themeController.colorScheme()),
+                 colorSchemeOrigin(themeController.colorScheme(), settings.colorScheme));
     QObject::connect(&themeController, &verdandi::ui::ThemeController::colorSchemeChanged, &themeController,
                      [](Qt::ColorScheme scheme) {
                          spdlog::info("Drawing in {} from now on", verdandi::ui::colorSchemeName(scheme));
@@ -90,9 +104,11 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
 
     QObject::connect(&scheduler, &verdandi::monitoring::SamplingScheduler::snapshotReady, &mainWindow,
                      &verdandi::ui::MainWindow::onSnapshotReady, Qt::QueuedConnection);
-    // The window applies what its views show; the service applies the rest and saves the file (DC-127).
+    // The window applies what its views show; the service applies the rest and
+    // saves the file (DC-127), and the controller applies the colour scheme.
     QObject::connect(&mainWindow, &verdandi::ui::MainWindow::settingsChanged, &mainWindow,
-                     [&settingsService, &mainWindow](const verdandi::domain::Settings& changed) {
+                     [&settingsService, &themeController, &mainWindow](const verdandi::domain::Settings& changed) {
+                         themeController.setSettings(changed);
                          if (const auto error = settingsService.change(changed)) {
                              mainWindow.showSettingsNotSaved(QString::fromStdWString(settingsService.path().wstring()),
                                                              QString::fromStdString(*error));

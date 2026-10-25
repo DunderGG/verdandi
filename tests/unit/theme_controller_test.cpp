@@ -7,14 +7,20 @@
 #include <QCheckBox>
 #include <QColor>
 #include <QCoreApplication>
+#include <QEvent>
 #include <QGuiApplication>
+#include <QObject>
 #include <QPalette>
 #include <QStyle>
 #include <QStyleHints>
 
+#include "domain/settings.h"
 #include "support/appearance.h"
 #include "ui/theme_controller.h"
 
+using verdandi::domain::ColorScheme;
+using verdandi::domain::LogLevel;
+using verdandi::domain::Settings;
 using verdandi::tests::ScopedColorScheme;
 using verdandi::tests::ScopedStyle;
 using verdandi::ui::colorSchemeName;
@@ -32,6 +38,43 @@ bool isDark(const QColor& color)
 {
     return color.lightnessF() < 0.5f;
 }
+
+Qt::ColorScheme drawnScheme()
+{
+    return QGuiApplication::styleHints()->colorScheme();
+}
+
+// Counts the theme changes that Qt sends the application, each of which gives
+// every widget its style again.
+class ThemeChangeCounter : public QObject
+{
+public:
+    ThemeChangeCounter()
+    {
+        QCoreApplication::instance()->installEventFilter(this);
+    }
+
+    ~ThemeChangeCounter() override
+    {
+        QCoreApplication::instance()->removeEventFilter(this);
+    }
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == QCoreApplication::instance() && event->type() == QEvent::ThemeChange) {
+            ++m_count;
+        }
+        return false;
+    }
+
+    [[nodiscard]] int count() const
+    {
+        return m_count;
+    }
+
+private:
+    int m_count{0};
+};
 
 } // namespace
 
@@ -127,6 +170,67 @@ TEST(ThemeController, StyleThatDrawsTheDarkScheme_Kept)
 
     EXPECT_TRUE(isStyle("windows11"));
     EXPECT_FALSE(QCoreApplication::testAttribute(Qt::AA_SetPalette));
+}
+
+TEST(ThemeController, SetSettings_EachColorScheme_DrawsInIt)
+{
+    const Qt::ColorScheme windows = drawnScheme();
+    struct Case
+    {
+        const char* name{};
+        ColorScheme setting{};
+        Qt::ColorScheme expected{};
+    };
+    // In this order, so that System follows another scheme.
+    const std::array cases{
+        Case{"Light", ColorScheme::Light, Qt::ColorScheme::Light},
+        Case{"Dark", ColorScheme::Dark, Qt::ColorScheme::Dark},
+        Case{"System", ColorScheme::System, windows},
+    };
+    ThemeController controller;
+
+    for (const auto& [name, setting, expected] : cases) {
+        SCOPED_TRACE(name);
+        controller.setSettings(Settings{.colorScheme = setting});
+        EXPECT_EQ(controller.colorScheme(), expected);
+    }
+}
+
+TEST(ThemeController, SetSettings_DarkWithTheLightOnlyStyle_DrawsWithFusionUntilLight)
+{
+    const ScopedStyle vista("windowsvista");
+    ThemeController controller;
+
+    controller.setSettings(Settings{.colorScheme = ColorScheme::Dark});
+    EXPECT_TRUE(isStyle("fusion"));
+
+    controller.setSettings(Settings{.colorScheme = ColorScheme::Light});
+    EXPECT_TRUE(isStyle("windowsvista"));
+}
+
+TEST(ThemeController, SetSettings_UnchangedColorScheme_AsksQtNoMore)
+{
+    ThemeController controller;
+    const ThemeChangeCounter themeChanges;
+
+    controller.setSettings(Settings{.colorScheme = ColorScheme::Dark});
+    ASSERT_EQ(themeChanges.count(), 1);
+    controller.setSettings(Settings{.colorScheme = ColorScheme::Dark, .logLevel = LogLevel::Debug});
+
+    EXPECT_EQ(themeChanges.count(), 1);
+}
+
+TEST(ThemeController, DestroyedAfterChoosingAScheme_GivesBackWindowsScheme)
+{
+    const Qt::ColorScheme windows = drawnScheme();
+    const ColorScheme other = windows == Qt::ColorScheme::Dark ? ColorScheme::Light : ColorScheme::Dark;
+    {
+        ThemeController controller;
+        controller.setSettings(Settings{.colorScheme = other});
+        ASSERT_NE(drawnScheme(), windows);
+    }
+
+    EXPECT_EQ(drawnScheme(), windows);
 }
 
 TEST(ThemeController, ColorSchemeName_EachScheme)

@@ -44,6 +44,12 @@ constexpr std::array kLogLevelItems{
     ComboItem<domain::LogLevel>{"Off", domain::LogLevel::Off},
 };
 
+constexpr std::array kColorSchemeItems{
+    ComboItem<domain::ColorScheme>{"Follow Windows", domain::ColorScheme::System},
+    ComboItem<domain::ColorScheme>{"Light", domain::ColorScheme::Light},
+    ComboItem<domain::ColorScheme>{"Dark", domain::ColorScheme::Dark},
+};
+
 constexpr std::array kByteUnitsItems{
     ComboItem<domain::ByteUnits>{"Binary (KiB, MiB, GiB)", domain::ByteUnits::Binary},
     ComboItem<domain::ByteUnits>{"Decimal (KB, MB, GB)", domain::ByteUnits::Decimal},
@@ -133,6 +139,14 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
     generalLayout->addRow("&Refresh interval:", m_refreshIntervalSpinBox);
     generalLayout->addRow("&Log level:", m_logLevelComboBox);
 
+    m_colorSchemeComboBox = createComboBox(kColorSchemeItems, this);
+    m_colorSchemeComboBox->setToolTip(
+        "Light or dark, or the one Windows sets for apps. A Windows contrast theme replaces both.");
+
+    auto* appearanceGroup = new QGroupBox("Appearance", this);
+    auto* appearanceLayout = new QFormLayout(appearanceGroup);
+    appearanceLayout->addRow("Colour &scheme:", m_colorSchemeComboBox);
+
     m_byteUnitsComboBox = createComboBox(kByteUnitsItems, this);
     m_byteUnitsComboBox->setToolTip("The units of memory, disk space, and I/O and network rates in bytes");
     m_networkRateUnitsComboBox = createComboBox(kNetworkRateUnitsItems, this);
@@ -142,7 +156,7 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
     auto* unitsLayout = new QFormLayout(unitsGroup);
     unitsLayout->addRow("&Byte units:", m_byteUnitsComboBox);
     unitsLayout->addRow("&Network throughput:", m_networkRateUnitsComboBox);
-    alignLabelColumns({generalLayout, unitsLayout});
+    alignLabelColumns({generalLayout, appearanceLayout, unitsLayout});
 
     // Named as the dashboard's cards are.
     m_cpuPanelCheckBox = new QCheckBox("&CPU", this);
@@ -169,6 +183,7 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(kSectionSpacing);
     layout->addWidget(generalGroup);
+    layout->addWidget(appearanceGroup);
     layout->addWidget(unitsGroup);
     layout->addWidget(dashboardGroup);
     layout->addWidget(m_buttonBox);
@@ -183,6 +198,7 @@ void SettingsDialog::setSettings(const domain::Settings& settings)
     m_refreshIntervalSpinBox->setValue(toSeconds(domain::nearestRefreshInterval(settings.refreshInterval)));
 
     selectValue(m_logLevelComboBox, settings.logLevel);
+    selectValue(m_colorSchemeComboBox, settings.colorScheme);
     selectValue(m_byteUnitsComboBox, settings.displayUnits.bytes);
     selectValue(m_networkRateUnitsComboBox, settings.displayUnits.networkRates);
 
@@ -210,6 +226,7 @@ domain::Settings SettingsDialog::settings() const
                 .network = m_networkPanelCheckBox->isChecked(),
                 .uptime = m_uptimePanelCheckBox->isChecked(),
             },
+        .colorScheme = selectedValue<domain::ColorScheme>(m_colorSchemeComboBox),
         .logLevel = selectedValue<domain::LogLevel>(m_logLevelComboBox),
     };
 }
@@ -228,6 +245,11 @@ QDoubleSpinBox* SettingsDialog::refreshIntervalSpinBox() const
 QComboBox* SettingsDialog::logLevelComboBox() const
 {
     return m_logLevelComboBox;
+}
+
+QComboBox* SettingsDialog::colorSchemeComboBox() const
+{
+    return m_colorSchemeComboBox;
 }
 
 QComboBox* SettingsDialog::byteUnitsComboBox() const

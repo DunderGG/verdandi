@@ -98,6 +98,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
 - [Colour schemes and themes](#colour-schemes-and-themes)
   - [DC-147](#dc-147): The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
   - [DC-148](#dc-148): The dark scheme on Windows 10 is drawn with Fusion, and every page in the palette's base colour
+  - [DC-149](#dc-149): A colour scheme setting, Windows' own, light or dark, asked of Qt with `QStyleHints::setColorScheme()`
 - [Dashboard tab](#dashboard-tab)
   - [DC-45](#dc-45): Health evaluation: domain types, a pure evaluator in `monitoring`, and the result carried in the snapshot
   - [DC-46](#dc-46): Dashboard cards: `ResourceCard` widgets fed by pure formatting helpers
@@ -979,6 +980,17 @@ The colour scheme that the monitor draws in.
 
 ---
 
+<a id="dc-149"></a>
+### DC-149: A colour scheme setting, Windows' own, light or dark, asked of Qt with `QStyleHints::setColorScheme()`
+
+**Decision:** `domain::Settings::colorScheme` chooses the scheme: System, the default, follows Windows, and Light and Dark keep one whatever Windows sets. The settings file names them "system", "light" and "dark", and the settings dialog offers them as Follow Windows, Light and Dark. `ui::ThemeController::setSettings()` asks Qt for the chosen scheme with `QStyleHints::setColorScheme()`, or `unsetColorScheme()` for System, only when the choice changes. `main.cpp` calls it before the window exists and after each `settingsChanged()`. The controller gives back Windows' scheme when it is destroyed, and a Windows contrast theme still replaces every choice.
+
+**Rationale:** Qt's Windows plugin takes the requested scheme in place of Windows' (Qt 6.8 and later): the application gets that scheme's palette, the windows11 style its control colours and the windows their title bars, as when Windows sets it, and [DC-148](#dc-148)'s Fusion follows. A palette of the monitor's own would leave the style's controls and the title bars in Windows' scheme. Each request makes Qt give every widget its style again, so an unchanged choice is not asked again. The scheme belongs to the application, as the log level does, so `app` applies it through the controller rather than the window, and applying it before the window exists draws the first frame in it. Qt ignores the request while a contrast theme is on, whose colours a user who needs them has chosen. Giving Windows' scheme back keeps one test's choice from reaching the next.
+
+**History:** Dark mode and theme support, a setting that chooses light, dark or Windows' scheme.
+
+---
+
 ## Dashboard tab
 
 The resource cards and the health evaluation they show.
@@ -1260,13 +1272,13 @@ The settings file and the settings dialog: what the file holds, how it is read a
 <a id="dc-123"></a>
 ### DC-123: Settings: one JSON file, read one setting at a time, with its types in `domain`
 
-**Decision:** `domain::Settings` holds the refresh interval, the display units, the dashboard panels shown and the log level, and its defaults are what the monitor does without a file. `verdandi_persistence` (the standard library and nlohmann/json only) writes it as JSON with a `version`, enumerations by name and the panels as booleans. It reads one setting at a time: a missing setting keeps its default, a refresh interval takes the nearest multiple of 0.5 s from 0.5 to 10 s (`domain::nearestRefreshInterval()`), and any other invalid value or unknown key keeps the default and is returned as a problem. A save writes a temporary file, which then replaces the file.
+**Decision:** `domain::Settings` holds the refresh interval, the display units, the dashboard panels shown, the colour scheme ([DC-149](#dc-149)) and the log level, and its defaults are what the monitor does without a file. `verdandi_persistence` (the standard library and nlohmann/json only) writes it as JSON with a `version`, enumerations by name and the panels as booleans. It reads one setting at a time: a missing setting keeps its default, a refresh interval takes the nearest multiple of 0.5 s from 0.5 to 10 s (`domain::nearestRefreshInterval()`), and any other invalid value or unknown key keeps the default and is returned as a problem. A save writes a temporary file, which then replaces the file.
 
 **Rationale:** The types are in `domain` because `ui`, which depends only on `domain` ([DC-20](#dc-20)), edits them and applies the units and panels. Problems are returned rather than logged, because the log level is read from the file before the logger is configured. Reading each setting alone means that a typing mistake costs one setting, not all, and booleans rather than a list of the panels shown keep a panel added later shown in an older file. Binary and decimal byte units are unambiguous; Windows' 1,024-byte "KB" is not. The limits are Task Manager's fastest update speed and Process Explorer's slowest; half-second steps reach every preset of both and keep each chart window a whole number of seconds, so its label is exact ([DC-61](#dc-61)). A save that fails cannot leave a truncated file, which would reset every setting. Without exceptions, nlohmann/json's `parse()` says only that the text is not valid, so a SAX handler finds where.
 
 **Consequences:** A save drops the keys this version does not know, such as a newer version's settings. Comments are rejected rather than read, because a save would drop them. A save is not flushed to disk before the rename, since the standard library cannot flush a file and `persistence` calls no Windows API, so a power loss just after a save can leave an empty file, and the monitor then starts with the defaults until a setting changes; the settings cost little to lose.
 
-**History:** Phase 6, settings file; Phase 6, settings at startup (the interval in half-second steps); Phase 6 code review (a save is not flushed to disk).
+**History:** Phase 6, settings file; Phase 6, settings at startup (the interval in half-second steps); Phase 6 code review (a save is not flushed to disk); Dark mode and theme support (the colour scheme).
 
 ---
 
@@ -1284,11 +1296,11 @@ The settings file and the settings dialog: what the file holds, how it is read a
 <a id="dc-127"></a>
 ### DC-127: Settings at startup: one file in the roaming folder, read before the logger, applied by `app` and saved on each change
 
-**Decision:** `main.cpp` reads `settings.json` from the user's roaming application data folder before it configures the logger, then logs whether the file was found and each problem in it, and leaves a file with problems as it is until a setting changes. `--log-level` sets the level of one run over the file's, and is never saved. The window gets the settings with `setSettings()`; `app::SettingsService` receives each `settingsChanged()`, applies the refresh interval to the scheduler, gives the logger the log level only if that changed, and saves the file on the UI thread. A save that fails is logged as an error and shown in a message box, and the settings apply until the monitor closes. The slow collectors run every 2 s, or every refresh interval if it is longer.
+**Decision:** `main.cpp` reads `settings.json` from the user's roaming application data folder before it configures the logger, then logs whether the file was found and each problem in it, and leaves a file with problems as it is until a setting changes. `--log-level` sets the level of one run over the file's, and is never saved. The window gets the settings with `setSettings()`; `app::SettingsService` receives each `settingsChanged()`, applies the refresh interval to the scheduler, gives the logger the log level only if that changed, and saves the file on the UI thread. `ui::ThemeController` gets the colour scheme before the window is created and from each `settingsChanged()` ([DC-149](#dc-149)). A save that fails is logged as an error and shown in a message box, and the settings apply until the monitor closes. The slow collectors run every 2 s, or every refresh interval if it is longer.
 
 **Rationale:** Windows keeps a user's settings in the roaming folder, which follows the profile, and data that belongs to one machine, such as the log, in the local one. Reading first gives the file's level to every message; it is why reading returns problems rather than logging them ([DC-123](#dc-123)). Rewriting a file with problems at startup would discard a mistake the user could still correct. The option is for one session of debugging, and applying the level only when it changes keeps the option's level while other settings change. Writing a few hundred bytes takes no thread of its own. Slow collectors faster than the tick would enumerate processes for snapshots that are never sent, the largest cost a longer interval is chosen to save.
 
-**History:** Phase 6, settings at startup.
+**History:** Phase 6, settings at startup; Dark mode and theme support (the colour scheme).
 
 ---
 
