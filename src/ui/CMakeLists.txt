@@ -71,6 +71,7 @@ target_link_libraries(verdandi_ui
         verdandi_domain
         verdandi_ui_charts
     PRIVATE
+        verdandi_ui_theme
         verdandi_version
 )
 

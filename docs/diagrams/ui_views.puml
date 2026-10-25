@@ -78,6 +78,12 @@ package "ui" $UI_COLOR {
             setSeriesSamples(series, samples)
         }
     }
+
+    package "theme (verdandi_ui_theme)" as themePackage {
+        class "theme::color()" as themeColor << (F,#FFF59D) >> {
+            color(role : ThemeColorRole,\n      background : QColor) : QColor
+        }
+    }
 }
 
 package "monitoring" $MONITORING_COLOR {
@@ -113,6 +119,8 @@ DashboardView ..> SampleHistory
 pages ..> SampleHistory
 DashboardView *-- SparklineWidget
 pages *-- SparklineWidget
+SparklineWidget ..> themeColor : line and grid colours,\nwhen it paints
+ProcessModel ..> themeColor : highlights and icons,\nfor the rows' base colour
 
 legend bottom left
     MainWindow passes every snapshot to every view, so that each history has no gaps

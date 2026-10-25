@@ -4,22 +4,14 @@
 #include <QFont>
 #include <QPalette>
 
+#include "domain/theme.h"
+#include "ui/theme/theme_colors.h"
+
 namespace verdandi::ui
 {
 
 namespace
 {
-
-// A darker shade for a light background and a lighter one for a dark
-// background. Each reaches 4.5:1 on the light palette's window (#f3f3f3) and
-// base (#ffffff) colours, or on the dark palette's window (#1e1e1e) and base
-// (#2d2d2d) colours (docs/coding_guidelines.md, "Text colours").
-constexpr QColor kGoodOnLight{0x1e, 0x7b, 0x45};
-constexpr QColor kGoodOnDark{0x3c, 0xb3, 0x71};
-constexpr QColor kWarningOnLight{0xa0, 0x5a, 0x00};
-constexpr QColor kWarningOnDark{0xd9, 0x82, 0x00};
-constexpr QColor kCriticalOnLight{0xc6, 0x28, 0x28};
-constexpr QColor kCriticalOnDark{0xff, 0x6b, 0x6b};
 
 // The label keeps its tone's colour in this role, which a label does not
 // otherwise use, and draws its text with it. It never sets WindowText or
@@ -43,16 +35,15 @@ QColor dimmedTextColor(const QColor& textColor)
 
 QColor textToneColor(TextTone tone, const QColor& textColor, const QColor& background)
 {
-    const bool isDark = background.lightnessF() < 0.5f;
     switch (tone) {
         case TextTone::Dimmed:
             return dimmedTextColor(textColor);
         case TextTone::Good:
-            return isDark ? kGoodOnDark : kGoodOnLight;
+            return theme::color(domain::ThemeColorRole::Good, background);
         case TextTone::Warning:
-            return isDark ? kWarningOnDark : kWarningOnLight;
+            return theme::color(domain::ThemeColorRole::Warning, background);
         case TextTone::Critical:
-            return isDark ? kCriticalOnDark : kCriticalOnLight;
+            return theme::color(domain::ThemeColorRole::Critical, background);
         case TextTone::Normal:
         default:
             return textColor;

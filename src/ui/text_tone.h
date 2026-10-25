@@ -34,9 +34,9 @@ inline constexpr qreal kDimmedTextAlpha = 0.6;
 
 /**
  * Returns the colour of text of tone, given the palette's text colour and the
- * background the text is drawn on. Good, Warning and Critical are a green, an
- * amber and a red, each with a darker shade for a light background and a
- * lighter one for a dark background.
+ * background the text is drawn on. Good, Warning and Critical are the theme's
+ * green, amber and red (DC-150), each with a darker shade for a light
+ * background and a lighter one for a dark background.
  */
 [[nodiscard]] QColor textToneColor(TextTone tone, const QColor& textColor, const QColor& background);
 

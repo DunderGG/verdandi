@@ -99,6 +99,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-147](#dc-147): The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
   - [DC-148](#dc-148): The dark scheme on Windows 10 is drawn with Fusion, and every page in the palette's base colour
   - [DC-149](#dc-149): A colour scheme setting, Windows' own, light or dark, asked of Qt with `QStyleHints::setColorScheme()`
+  - [DC-150](#dc-150): The colours that widgets draw themselves are theme roles, each with a light and a dark shade, picked by the surface they are drawn on whenever they paint
 - [Dashboard tab](#dashboard-tab)
   - [DC-45](#dc-45): Health evaluation: domain types, a pure evaluator in `monitoring`, and the result carried in the snapshot
   - [DC-46](#dc-46): Dashboard cards: `ResourceCard` widgets fed by pure formatting helpers
@@ -835,11 +836,11 @@ The network-name collector's own thread is described in [DC-100](#dc-100).
 <a id="dc-48"></a>
 ### DC-48: `SparklineWidget`: a caller-owned history, series on one Y range, optional decorations, and cheap dense charts
 
-**Decision:** `SparklineWidget` draws every chart, from the dashboard's bare sparklines to labelled charts with legends. The caller owns the history and passes a view of it each tick, and a missing sample breaks the line. A chart's series share one Y range. Only the primary series is filled, and only its minimum and maximum are marked, under its name when the chart has a legend. The grid, axis labels and annotations are off by default. The grid moves with a sample index from the caller, the axis gutter fits the widest of the caller's label templates, and annotations can have their own formatter. Series take five fixed hues, or another palette slot's, and past the fifth a shared grey. A chart with more samples than pixel columns draws each column's lowest and highest point with a one-pixel cosmetic pen.
+**Decision:** `SparklineWidget` draws every chart, from the dashboard's bare sparklines to labelled charts with legends. The caller owns the history and passes a view of it each tick, and a missing sample breaks the line. A chart's series share one Y range. Only the primary series is filled, and only its minimum and maximum are marked, under its name when the chart has a legend. The grid, axis labels and annotations are off by default. The grid moves with a sample index from the caller, the axis gutter fits the widest of the caller's label templates, and annotations can have their own formatter. Series take the theme's five line colours ([DC-150](#dc-150)), or another palette slot's, and past the fifth a shared grey. A chart with more samples than pixel columns draws each column's lowest and highest point with a one-pixel cosmetic pen.
 
 **Rationale:** A caller-owned view serves any length of history; gaps follow [DC-12](#dc-12). Series of different units belong on separate charts, and one fill keeps fills from turning muddy. Beside a legend, unnamed extremes did not say whose they were. A full history keeps its length, so only the caller knows that time has moved on. A gutter sized from the current labels moved as traffic came and went, so stacked charts did not line up. An annotation of 8% above a readout of 7.5% looked like a disagreement. The palette, checked for separation under colour-vision deficiency, leaves out red, amber and green, the health status colours. Generated hues past the fifth would look alike, and a slot keeps a volume's colour when another appears. At 30 minutes the CPU page took about 210 ms per tick, mostly in Qt's stroker for pens wider than a pixel. Min/max decimation bounds the work by the chart's width and, unlike averaging, keeps one-sample spikes.
 
-**History:** Phase 2, dashboard view; Phase 3, custom sparkline widget (the grid, several series, axis labels and annotations, and the series palette); Phase 3, Performance tab (dense charts); code review F-24 (the gutter sized from templates); code review F-26 (a separate annotation formatter, named extremes, and colour slots); maintenance (DC-49, DC-50, DC-51, DC-52, DC-60, DC-65 and DC-67 merged in, DC-67's link speeds into [DC-57](#dc-57)).
+**History:** Phase 2, dashboard view; Phase 3, custom sparkline widget (the grid, several series, axis labels and annotations, and the series palette); Phase 3, Performance tab (dense charts); code review F-24 (the gutter sized from templates); code review F-26 (a separate annotation formatter, named extremes, and colour slots); maintenance (DC-49, DC-50, DC-51, DC-52, DC-60, DC-65 and DC-67 merged in, DC-67's link speeds into [DC-57](#dc-57)); Dark mode and theme support (the line and grid colours from the theme).
 
 ---
 
@@ -954,7 +955,7 @@ The rule and its reasons are in [coding_guidelines.md — Text colours](coding_g
 
 ## Colour schemes and themes
 
-The colour scheme that the monitor draws in.
+The colour scheme that the monitor draws in, and the colours that its widgets draw themselves.
 
 <a id="dc-147"></a>
 ### DC-147: The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
@@ -988,6 +989,19 @@ The colour scheme that the monitor draws in.
 **Rationale:** Qt's Windows plugin takes the requested scheme in place of Windows' (Qt 6.8 and later): the application gets that scheme's palette, the windows11 style its control colours and the windows their title bars, as when Windows sets it, and [DC-148](#dc-148)'s Fusion follows. A palette of the monitor's own would leave the style's controls and the title bars in Windows' scheme. Each request makes Qt give every widget its style again, so an unchanged choice is not asked again. The scheme belongs to the application, as the log level does, so `app` applies it through the controller rather than the window, and applying it before the window exists draws the first frame in it. Qt ignores the request while a contrast theme is on, whose colours a user who needs them has chosen. Giving Windows' scheme back keeps one test's choice from reaching the next.
 
 **History:** Dark mode and theme support, a setting that chooses light, dark or Windows' scheme.
+
+---
+
+<a id="dc-150"></a>
+### DC-150: The colours that widgets draw themselves are theme roles, each with a light and a dark shade, picked by the surface they are drawn on whenever they paint
+
+**Decision:** Every colour that a widget draws where the palette has no role for it, the charts' five lines and their grid, the status text, the process rows' highlights and the access icons, is a `domain::ThemeColorRole`. `ui::theme::color()` gives each role's shade for a light or a dark surface, from one table in a target of its own, `verdandi_ui_theme`, which the chart widgets and the rest of `ui` link. A widget picks the shade by the lightness of the colour it is drawn on, whenever it paints or its palette changes; the process model asks with the application palette's base colour each time a view asks for data. Icons, which are painted once, are painted for both and chosen the same way. On a light surface the access padlock takes the Warning amber.
+
+**Rationale:** The colours were constants in four files. One table names each by what it colours, so a change to them, or a new consumer, has one place to go, and the contrast rules are tested once for all of them. The chart widgets may not depend on the rest of `ui`, so the table sits in a target below both. The roles are domain values, free of Qt, as the health levels are. Picking by lightness when painting follows a change of scheme without an event of its own, and suits any surface, a card or a page, in any style. The padlock's amber reached 2.9:1 on white, below WCAG's 3:1 for graphics, and one colour drawn once for both schemes cannot reach it on both.
+
+**Consequences:** A new colour that a widget draws itself is a new role with two shades, and a contrast test if it is text or a graphic.
+
+**History:** Dark mode and theme support, sparklines and custom widgets that follow the theme.
 
 ---
 

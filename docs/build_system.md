@@ -166,7 +166,7 @@ reads the two test executables and the application, which no test runs, so
 that `main.cpp` counts as not covered instead of being absent. The script keeps
 the files under `src\`, which leaves out test, moc and vcpkg sources, and
 prints the coverage of each directory (`app`, `domain`, `monitoring`,
-`platform/windows`, `ui`, `ui/charts`) and of `src\` in total, rounded down so
+`platform/windows`, `ui`, `ui/charts`, `ui/theme`) and of `src\` in total, rounded down so
 that only full coverage reads 100%. It chooses the files itself, regardless of
 case, because `llvm-cov` compares paths case-sensitively: given `src` with its
 drive letter in another case than CMake's, as VS Code's terminal may give it,

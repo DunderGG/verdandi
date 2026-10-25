@@ -124,6 +124,7 @@ add_verdandi_module(src/platform/windows)
 add_verdandi_module(src/persistence)
 add_verdandi_module(src/ui)
 add_verdandi_module(src/ui/charts)
+add_verdandi_module(src/ui/theme)
 add_verdandi_module(benchmarks)
 
 if(BUILD_TESTING)

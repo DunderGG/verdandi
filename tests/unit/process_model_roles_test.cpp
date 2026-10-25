@@ -13,10 +13,12 @@
 
 #include "domain/process_info.h"
 #include "domain/settings.h"
+#include "support/appearance.h"
 #include "support/process_model_harness.h"
 #include "support/process_samples.h"
 #include "ui/dashboard_formatting.h"
 #include "ui/process_formatting.h"
+#include "ui/process_icons.h"
 #include "ui/process_model.h"
 
 // ProcessModel: what each column shows in each role, from the header titles
@@ -272,6 +274,22 @@ TEST(ProcessModel, Data_NameColumn_AccessIndicatorPerDetailsStatus)
     EXPECT_NE(images[1], images[2]);
     EXPECT_NE(images[1], images[3]);
     EXPECT_NE(images[2], images[3]);
+}
+
+TEST(ProcessModel, Data_AccessIndicator_PaintedForTheSchemeOfTheRows)
+{
+    ProcessModel model;
+    model.updateProcesses({withDetails(1, ProcessDetailsStatus::AccessDenied)}, kNow);
+    const QModelIndex name = model.index(0, static_cast<int>(Column::Name));
+
+    for (const auto scheme : {Qt::ColorScheme::Light, Qt::ColorScheme::Dark}) {
+        const ScopedColorScheme colorScheme(scheme);
+        const bool isDark = scheme == Qt::ColorScheme::Dark;
+
+        EXPECT_EQ(iconImage(name.data(Qt::DecorationRole)),
+                  iconImage(verdandi::ui::detailsStatusIcon(ProcessDetailsStatus::AccessDenied, isDark)))
+            << (isDark ? "dark" : "light");
+    }
 }
 
 TEST(ProcessModel, Data_NameToolTip_GivesDetailsOrWhyMissing)

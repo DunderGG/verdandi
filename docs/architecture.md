@@ -105,7 +105,7 @@ Windows integration layer (platform/windows)
 | Module | Responsibility |
 | --- | --- |
 | `app` | Application startup, dependency wiring, settings, logging configuration, and lifetime management. |
-| `ui` | Qt Widgets, custom sparkline chart widgets, tables, and view models. Contains no direct Windows API calls. |
+| `ui` | Qt Widgets, custom sparkline chart widgets, tables, view models, and the theme's colours. Contains no direct Windows API calls. |
 | `monitoring` | Collector interfaces, scheduler, snapshot aggregation, sampling policy, and health evaluation. Metric history uses `domain::RingBuffer`. |
 | `platform/windows` | Narrow wrappers around Windows APIs and conversion into application domain types. Its collectors implement the interfaces in `monitoring/collector.h` (CMake target `verdandi_collector_interfaces`), its only dependency on `monitoring`. |
 | `domain` | Typed metrics, process identity, health state, the result of ending a process, and the user's settings, plus the `RingBuffer<T>` container for time-series history. Free of Qt and Windows dependencies. |
@@ -366,6 +366,8 @@ Enable per-monitor DPI awareness in the application manifest. `src/app/verdandi.
 Windows sets a light or a dark colour scheme for applications, or a contrast theme, whose colours replace both. Qt reads the scheme when the `QApplication` starts, before any window exists, and again whenever Windows changes it, and reports it in `QStyleHints::colorScheme()`: `Light`, `Dark`, or `Unknown` while a contrast theme is on. The application palette follows it, the windows11 style draws the controls in it, and Qt's Windows plugin darkens the title bars in the dark scheme. `ui::ThemeController`, which `main.cpp` creates before the window, follows the scheme for the application, and the log names it at startup and after each change ([DC-147](design_decisions.md#dc-147)).
 
 The settings can keep the light or the dark scheme whatever Windows sets. Before the window is created, and after each change of the settings, `main.cpp` gives them to the controller, which asks Qt for the chosen scheme with `QStyleHints::setColorScheme()`, or for Windows' with `unsetColorScheme()`. Qt then draws in that scheme, palette, controls and title bars, as if Windows had set it. A contrast theme still replaces the chosen scheme ([DC-149](design_decisions.md#dc-149)).
+
+The colours that the widgets draw themselves, where the palette has no role for them, are theme roles (`domain::ThemeColorRole`): the charts' lines and grid, the status text, and the process rows' highlights and access icons. `ui::theme::color()`, in the `verdandi_ui_theme` target that the chart widgets share with the rest of `ui`, gives each a shade for a light and for a dark surface. A widget picks the shade by the colour it is drawn on whenever it paints or its palette changes, so every widget follows a change of scheme ([DC-150](design_decisions.md#dc-150)).
 
 Qt's windowsvista style, which Qt picks on Windows 10, draws only the light scheme. While the scheme is dark, the controller replaces it with Fusion, which draws Qt's dark palette, and sets the palette's window and base colours, so that Fusion draws every widget with the application's palette. Each tab's page fills itself with the base colour, and the scroll areas on the pages leave theirs unfilled, so that the pages, which the text colours are checked against, are the same colour in every style ([DC-148](design_decisions.md#dc-148)).
 

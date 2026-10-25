@@ -329,7 +329,7 @@ Reasons:
 
 - Text must reach WCAG's 4.5:1 contrast in both the light and the dark colour scheme, on the background it is actually drawn on. Tab pages are drawn in the palette's base colour, not its window colour, in every style ([DC-148](design_decisions.md#dc-148)), and with the windows11 style so are the cards.
 - Draw dimmed or status text with a `TextTone` (`ui/text_tone.h`): a `TonedLabel`, or `textToneColor()` and `dimmedTextColor()` where there is no label, such as an item model's foreground. Do not use `palette(mid)` or another frame colour for text, nor a fixed colour that suits only one scheme, nor a style sheet colour, which does not follow a change of scheme.
-- A new tone needs a shade for each scheme, and `text_tone_test.cpp` checks every tone against both schemes' window and base colours.
+- A new tone needs a shade for each scheme in the theme ([Colours that widgets draw](#colours-that-widgets-draw)). `theme_colors_test.cpp` checks every status colour, and `text_tone_test.cpp` the normal and dimmed text, against both schemes' window and base colours.
 
 Reasons:
 
@@ -337,6 +337,16 @@ Reasons:
 - **Dimmed is the text colour at 60%** (`kDimmedTextAlpha`), the opacity the charts use for their muted text, so readout names, descriptions and chart labels are dimmed alike. The palette's `PlaceholderText`, the text colour at 50% in the windows11 style, reaches only 3.95:1 on white.
 - **Two shades per status colour:** no green, amber or red reaches 4.5:1 on both white and #2d2d2d. Each of the earlier status colours failed in one scheme: the Healthy green #2e8b57 reached 4.25:1 on white but 3.24:1 on #2d2d2d. A tone picks its shade by the lightness of the background.
 - **Worked out in code, not in a style sheet:** a style sheet fixes a colour when it is applied. A `TonedLabel` works its colour out from the colours it inherits, and again on every palette change, so it follows a change of scheme while the app runs. An item model asks `dimmedTextColor()` each time the view paints, which follows the scheme without an event.
+
+### Colours that widgets draw
+
+- A colour that a widget draws where the palette has no role for it, such as a chart's line, a status or an icon, is a `domain::ThemeColorRole`. Take it from `ui::theme::color()` with the colour it is drawn on, whenever the widget paints or its palette changes. Never keep one from when the widget was built; an icon painted once is painted for both schemes and chosen when it is shown ([DC-150](design_decisions.md#dc-150)).
+- A graphic that tells something, such as an access icon, reaches WCAG's 3:1 for graphics on both schemes' window and base colours, which `theme_colors_test.cpp` checks.
+
+Reasons:
+
+- **One table, named by what each colour colours:** a change of colour, or the code that draws a new one, has one place to go, and the contrast of all of them is tested in one place.
+- **Picked by the surface, when painting:** the lightness of the colour a widget is drawn on chooses the shade, so a widget follows a change of scheme, and suits a card as well as a page, in every style.
 
 ### Resource management
 

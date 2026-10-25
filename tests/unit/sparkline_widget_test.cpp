@@ -7,16 +7,21 @@
 #include <gtest/gtest.h>
 #include <QColor>
 #include <QImage>
+#include <QPalette>
 #include <QPoint>
 #include <QRect>
 #include <QRectF>
 #include <QRegion>
 #include <QString>
+#include <QWidget>
 
+#include "domain/theme.h"
 #include "support/sparkline_samples.h"
 #include "ui/charts/sparkline_widget.h"
+#include "ui/theme/theme_colors.h"
 
 using namespace verdandi::ui::charts;
+using verdandi::domain::ThemeColorRole;
 using verdandi::tests::kChartArea;
 using verdandi::tests::sineSamples;
 
@@ -226,6 +231,24 @@ TEST(SparklineWidget, SeriesColor_DefaultUntilOverridden)
     widget.setSeriesColor(1, QColor(Qt::black));
 
     EXPECT_EQ(widget.seriesColor(1), QColor(Qt::black));
+}
+
+TEST(SparklineWidget, SurfaceTurnsDark_SeriesAndGridTakeTheThemesDarkShades)
+{
+    QWidget parent;
+    QPalette palette;
+    palette.setColor(QPalette::Window, QColor(0xff, 0xff, 0xff));
+    parent.setPalette(palette);
+    auto* widget = new SparklineWidget(&parent);
+    widget->setSeriesCount(2);
+    ASSERT_EQ(widget->seriesColor(1), defaultSeriesColor(1, false));
+    ASSERT_EQ(widget->gridColor(), verdandi::ui::theme::color(ThemeColorRole::ChartGrid, false));
+
+    palette.setColor(QPalette::Window, QColor(0x2d, 0x2d, 0x2d));
+    parent.setPalette(palette);
+
+    EXPECT_EQ(widget->seriesColor(1), defaultSeriesColor(1, true));
+    EXPECT_EQ(widget->gridColor(), verdandi::ui::theme::color(ThemeColorRole::ChartGrid, true));
 }
 
 TEST(SparklineWidget, ValueFormatter_UsedForLabels)

@@ -60,6 +60,10 @@ namespace verdandi::ui
  * process whose path and command line could not be read, and its tooltip
  * gives them or says why they are missing (processDetailsToolTip()).
  *
+ * The indicators and the rows' highlights take the theme's colours for the
+ * application palette's base colour, which the rows are drawn on, each time
+ * a view asks, so they follow a change of scheme (DC-150).
+ *
  * Not thread-safe; use only on the UI thread.
  */
 class ProcessModel : public QAbstractItemModel
@@ -199,8 +203,10 @@ private:
     domain::ByteUnits m_byteUnits{domain::ByteUnits::Binary};
     // False until the first list, whose processes are not highlighted as new.
     bool m_hasList{false};
-    // The name column's icon for each ProcessDetailsStatus, indexed by its value.
-    std::array<QIcon, domain::kProcessDetailsStatusCount> m_detailsIcons;
+    // The name column's icon for each ProcessDetailsStatus, indexed by its
+    // value, for rows on a light surface and on a dark surface.
+    std::array<QIcon, domain::kProcessDetailsStatusCount> m_lightDetailsIcons;
+    std::array<QIcon, domain::kProcessDetailsStatusCount> m_darkDetailsIcons;
 };
 
 } // namespace verdandi::ui

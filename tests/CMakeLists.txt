@@ -76,6 +76,7 @@ add_executable(verdandi_tests
     unit/sparkline_geometry_test.cpp
     unit/sparkline_widget_test.cpp
     unit/text_tone_test.cpp
+    unit/theme_colors_test.cpp
     unit/theme_controller_test.cpp
     unit/cpu_collector_test.cpp
     unit/memory_collector_test.cpp
@@ -154,6 +155,7 @@ target_link_libraries(verdandi_tests
         verdandi_persistence
         verdandi_platform_windows
         verdandi_ui
+        verdandi_ui_theme
         Qt6::Core
         Qt6::Network
         Qt6::Widgets

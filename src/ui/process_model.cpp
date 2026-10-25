@@ -17,10 +17,12 @@
 #include <QPalette>
 #include <QString>
 
+#include "domain/theme.h"
 #include "ui/dashboard_formatting.h"
 #include "ui/process_formatting.h"
 #include "ui/process_icons.h"
 #include "ui/text_tone.h"
+#include "ui/theme/theme_colors.h"
 
 namespace verdandi::ui
 {
@@ -30,10 +32,12 @@ namespace
 
 using Column = ProcessModel::Column;
 
-// Highlights for new and exited processes. Translucent, so they tint the row
-// colours of light and dark palettes alike and keep the text readable.
-constexpr QColor kStartedColor{46, 160, 67, 90};
-constexpr QColor kExitedColor{218, 54, 51, 90};
+// The colour the rows are drawn on. Asked whenever a view asks for data, so
+// the theme's colours follow a change of scheme without an event (DC-150).
+QColor rowBackground()
+{
+    return QGuiApplication::palette().color(QPalette::Base);
+}
 
 // Returns the first and last columns whose values differ between two readings
 // of one process, or std::nullopt when none do. Raw values are compared, not
@@ -173,8 +177,10 @@ QString headerToolTip(Column column)
 
 ProcessModel::ProcessModel(QObject* parent) : QAbstractItemModel(parent)
 {
-    for (std::size_t status = 0; status < m_detailsIcons.size(); ++status) {
-        m_detailsIcons[status] = detailsStatusIcon(static_cast<domain::ProcessDetailsStatus>(status));
+    for (std::size_t status = 0; status < domain::kProcessDetailsStatusCount; ++status) {
+        const auto detailsStatus = static_cast<domain::ProcessDetailsStatus>(status);
+        m_lightDetailsIcons[status] = detailsStatusIcon(detailsStatus, false);
+        m_darkDetailsIcons[status] = detailsStatusIcon(detailsStatus, true);
     }
 }
 
@@ -424,16 +430,18 @@ QVariant ProcessModel::data(const QModelIndex& index, int role) const
         case Qt::DecorationRole:
             if (column == Column::Name) {
                 const auto status = static_cast<std::size_t>(node->process.detailsStatus);
-                assert(status < m_detailsIcons.size() && "kProcessDetailsStatusCount must count every status");
-                return m_detailsIcons[status];
+                assert(status < domain::kProcessDetailsStatusCount &&
+                       "kProcessDetailsStatusCount must count every status");
+                return theme::isDark(rowBackground()) ? m_darkDetailsIcons[status] : m_lightDetailsIcons[status];
             }
             return {};
         case Qt::BackgroundRole:
+            // Translucent, so they tint the rows and keep the text readable.
             if (node->exitedAt) {
-                return QBrush(kExitedColor);
+                return QBrush(theme::color(domain::ThemeColorRole::ProcessExited, rowBackground()));
             }
             if (node->startedAt) {
-                return QBrush(kStartedColor);
+                return QBrush(theme::color(domain::ThemeColorRole::ProcessStarted, rowBackground()));
             }
             return {};
         case Qt::FontRole:

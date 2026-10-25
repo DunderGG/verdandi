@@ -5,12 +5,18 @@
 #include <QPalette>
 #include <QWidget>
 
+#include "domain/theme.h"
 #include "support/text_contrast.h"
 #include "ui/text_tone.h"
+#include "ui/theme/theme_colors.h"
 
+using verdandi::domain::ThemeColorRole;
 using verdandi::tests::blendedOver;
 using verdandi::tests::contrastRatio;
+using verdandi::tests::kDarkScheme;
+using verdandi::tests::kLightScheme;
 using verdandi::tests::kMinimumTextContrast;
+using verdandi::tests::SchemeColors;
 using verdandi::ui::dimmedTextColor;
 using verdandi::ui::TextTone;
 using verdandi::ui::textToneColor;
@@ -21,21 +27,7 @@ namespace
 
 constexpr std::array kTones{TextTone::Normal, TextTone::Dimmed, TextTone::Good, TextTone::Warning, TextTone::Critical};
 
-// The text, window and base colours of Qt's light and dark Windows palettes
-// with the windows11 style, which draws views on the base colour.
-struct Scheme
-{
-    QColor text;
-    QColor window;
-    QColor base;
-};
-
-const Scheme kLight{
-    .text = QColor(0x00, 0x00, 0x00), .window = QColor(0xf3, 0xf3, 0xf3), .base = QColor(0xff, 0xff, 0xff)};
-const Scheme kDark{
-    .text = QColor(0xff, 0xff, 0xff), .window = QColor(0x1e, 0x1e, 0x1e), .base = QColor(0x2d, 0x2d, 0x2d)};
-
-QPalette paletteOf(const Scheme& scheme)
+QPalette paletteOf(const SchemeColors& scheme)
 {
     QPalette palette;
     palette.setColor(QPalette::WindowText, scheme.text);
@@ -50,15 +42,37 @@ QColor drawnColor(const TonedLabel& label)
 
 } // namespace
 
-TEST(TextTone, TextToneColor_EveryToneReadableOnWindowAndBaseOfBothSchemes)
+TEST(TextTone, TextToneColor_NormalAndDimmedReadableOnWindowAndBaseOfBothSchemes)
 {
-    for (const Scheme& scheme : {kLight, kDark}) {
-        for (const TextTone tone : kTones) {
+    for (const SchemeColors& scheme : {kLightScheme, kDarkScheme}) {
+        for (const TextTone tone : {TextTone::Normal, TextTone::Dimmed}) {
             const QColor color = textToneColor(tone, scheme.text, scheme.window);
             for (const QColor& background : {scheme.window, scheme.base}) {
                 EXPECT_GE(contrastRatio(blendedOver(color, background), background), kMinimumTextContrast)
                     << "tone " << static_cast<int>(tone) << " on " << background.name().toStdString();
             }
+        }
+    }
+}
+
+TEST(TextTone, TextToneColor_StatusTones_TheThemesColoursForTheBackground)
+{
+    struct Case
+    {
+        const char* name{};
+        TextTone tone{};
+        ThemeColorRole role{};
+    };
+    const std::array cases{
+        Case{"Good", TextTone::Good, ThemeColorRole::Good},
+        Case{"Warning", TextTone::Warning, ThemeColorRole::Warning},
+        Case{"Critical", TextTone::Critical, ThemeColorRole::Critical},
+    };
+
+    for (const auto& [name, tone, role] : cases) {
+        SCOPED_TRACE(name);
+        for (const SchemeColors& scheme : {kLightScheme, kDarkScheme}) {
+            EXPECT_EQ(textToneColor(tone, scheme.text, scheme.window), verdandi::ui::theme::color(role, scheme.window));
         }
     }
 }
@@ -69,15 +83,6 @@ TEST(TextTone, DimmedTextColor_TextColourAtReducedOpacity)
 
     EXPECT_EQ(dimmed.rgb(), QColor(0x12, 0x34, 0x56).rgb());
     EXPECT_NEAR(dimmed.alphaF(), verdandi::ui::kDimmedTextAlpha, 0.01);
-}
-
-TEST(TextTone, TextToneColor_StatusTonesLighterOnDarkBackground)
-{
-    for (const TextTone tone : {TextTone::Good, TextTone::Warning, TextTone::Critical}) {
-        const QColor onLight = textToneColor(tone, kLight.text, kLight.window);
-        const QColor onDark = textToneColor(tone, kDark.text, kDark.window);
-        EXPECT_GT(onDark.lightnessF(), onLight.lightnessF()) << static_cast<int>(tone);
-    }
 }
 
 TEST(TonedLabel, StatusTones_BoldOthersNot)
@@ -96,25 +101,25 @@ TEST(TonedLabel, StatusTones_BoldOthersNot)
 TEST(TonedLabel, ParentPaletteChanges_ColourFollowsTheNewScheme)
 {
     QWidget parent;
-    parent.setPalette(paletteOf(kLight));
+    parent.setPalette(paletteOf(kLightScheme));
     auto* good = new TonedLabel(TextTone::Good, &parent);
     auto* dimmed = new TonedLabel(TextTone::Dimmed, &parent);
-    ASSERT_EQ(drawnColor(*good), textToneColor(TextTone::Good, kLight.text, kLight.window));
-    ASSERT_EQ(drawnColor(*dimmed), dimmedTextColor(kLight.text));
+    ASSERT_EQ(drawnColor(*good), textToneColor(TextTone::Good, kLightScheme.text, kLightScheme.window));
+    ASSERT_EQ(drawnColor(*dimmed), dimmedTextColor(kLightScheme.text));
 
-    parent.setPalette(paletteOf(kDark));
+    parent.setPalette(paletteOf(kDarkScheme));
 
-    EXPECT_EQ(drawnColor(*good), textToneColor(TextTone::Good, kDark.text, kDark.window));
-    EXPECT_EQ(drawnColor(*dimmed), dimmedTextColor(kDark.text));
+    EXPECT_EQ(drawnColor(*good), textToneColor(TextTone::Good, kDarkScheme.text, kDarkScheme.window));
+    EXPECT_EQ(drawnColor(*dimmed), dimmedTextColor(kDarkScheme.text));
 }
 
 TEST(TonedLabel, SetTone_ChangesTheColour)
 {
     QWidget parent;
-    parent.setPalette(paletteOf(kDark));
+    parent.setPalette(paletteOf(kDarkScheme));
     auto* label = new TonedLabel(TextTone::Dimmed, &parent);
 
     label->setTone(TextTone::Critical);
 
-    EXPECT_EQ(drawnColor(*label), textToneColor(TextTone::Critical, kDark.text, kDark.window));
+    EXPECT_EQ(drawnColor(*label), textToneColor(TextTone::Critical, kDarkScheme.text, kDarkScheme.window));
 }

@@ -97,11 +97,11 @@ struct SeriesSummary
 
 /**
  * Returns the default colour of series index on a light or dark surface. The
- * first five series take fixed categorical hues (blue, orange, aqua, violet,
- * magenta) in an order checked for colour-vision-deficiency separation. Red,
- * amber, and green are left out because they are the health status colours.
- * Further series share a muted grey rather than generated or repeated hues;
- * give them explicit colours or split them across charts.
+ * first five series take the theme's chart lines (DC-150): categorical hues
+ * (blue, orange, aqua, violet, magenta) in an order checked for
+ * colour-vision-deficiency separation, without the status colours' red, amber
+ * and green. Further series share a muted grey rather than generated or
+ * repeated hues; give them explicit colours or split them across charts.
  */
 [[nodiscard]] QColor defaultSeriesColor(std::size_t index, bool darkSurface);
 
@@ -163,6 +163,9 @@ public:
      * colour of its colour slot (its position unless set) for the current palette.
      */
     [[nodiscard]] QColor seriesColor(std::size_t series) const;
+
+    /** Returns the colour the grid and its frame are painted in: the theme's for the current palette. */
+    [[nodiscard]] QColor gridColor() const;
 
     /** Names series in the legend. Unlabelled series are left out of the legend. */
     void setSeriesLabel(std::size_t series, const QString& label);

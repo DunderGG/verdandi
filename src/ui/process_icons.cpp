@@ -12,6 +12,9 @@
 #include <QRectF>
 #include <QSize>
 
+#include "domain/theme.h"
+#include "ui/theme/theme_colors.h"
+
 namespace verdandi::ui
 {
 
@@ -22,9 +25,6 @@ namespace
 constexpr int kIconSize = 16;
 constexpr std::array kDevicePixelRatios{1.0, 1.5, 2.0};
 
-constexpr QColor kDeniedColor{208, 138, 16};
-constexpr QColor kNeverOpenedColor{61, 127, 201};
-constexpr QColor kUnavailableColor{140, 140, 140};
 constexpr qreal kStrokeWidth = 1.6;
 
 using Glyph = std::function<void(QPainter&)>;
@@ -46,23 +46,23 @@ QIcon paintIcon(const Glyph& glyph)
     return icon;
 }
 
-void paintPadlock(QPainter& painter)
+void paintPadlock(QPainter& painter, const QColor& color)
 {
     QPainterPath shackle;
     shackle.moveTo(5.0, 7.5);
     shackle.lineTo(5.0, 5.0);
     shackle.arcTo(QRectF(5.0, 2.0, 6.0, 6.0), 180.0, -180.0);
     shackle.lineTo(11.0, 7.5);
-    painter.setPen(QPen(kDeniedColor, kStrokeWidth, Qt::SolidLine, Qt::RoundCap));
+    painter.setPen(QPen(color, kStrokeWidth, Qt::SolidLine, Qt::RoundCap));
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(shackle);
 
     painter.setPen(Qt::NoPen);
-    painter.setBrush(kDeniedColor);
+    painter.setBrush(color);
     painter.drawRoundedRect(QRectF(3.0, 7.0, 10.0, 7.5), 1.5, 1.5);
 }
 
-void paintShield(QPainter& painter)
+void paintShield(QPainter& painter, const QColor& color)
 {
     QPainterPath shield;
     shield.moveTo(8.0, 1.5);
@@ -73,13 +73,13 @@ void paintShield(QPainter& painter)
     shield.lineTo(2.5, 3.5);
     shield.closeSubpath();
     painter.setPen(Qt::NoPen);
-    painter.setBrush(kNeverOpenedColor);
+    painter.setBrush(color);
     painter.drawPath(shield);
 }
 
-void paintBarredCircle(QPainter& painter)
+void paintBarredCircle(QPainter& painter, const QColor& color)
 {
-    painter.setPen(QPen(kUnavailableColor, kStrokeWidth, Qt::SolidLine, Qt::RoundCap));
+    painter.setPen(QPen(color, kStrokeWidth, Qt::SolidLine, Qt::RoundCap));
     painter.setBrush(Qt::NoBrush);
     painter.drawEllipse(QRectF(2.5, 2.5, 11.0, 11.0));
     painter.drawLine(QPointF(5.0, 8.0), QPointF(11.0, 8.0));
@@ -87,15 +87,21 @@ void paintBarredCircle(QPainter& painter)
 
 } // namespace
 
-QIcon detailsStatusIcon(domain::ProcessDetailsStatus status)
+QIcon detailsStatusIcon(domain::ProcessDetailsStatus status, bool darkSurface)
 {
     switch (status) {
-        case domain::ProcessDetailsStatus::AccessDenied:
-            return paintIcon(paintPadlock);
-        case domain::ProcessDetailsStatus::NotQueried:
-            return paintIcon(paintShield);
-        case domain::ProcessDetailsStatus::Unavailable:
-            return paintIcon(paintBarredCircle);
+        case domain::ProcessDetailsStatus::AccessDenied: {
+            const QColor color = theme::color(domain::ThemeColorRole::AccessDenied, darkSurface);
+            return paintIcon([&color](QPainter& painter) { paintPadlock(painter, color); });
+        }
+        case domain::ProcessDetailsStatus::NotQueried: {
+            const QColor color = theme::color(domain::ThemeColorRole::AccessNeverOpened, darkSurface);
+            return paintIcon([&color](QPainter& painter) { paintShield(painter, color); });
+        }
+        case domain::ProcessDetailsStatus::Unavailable: {
+            const QColor color = theme::color(domain::ThemeColorRole::AccessUnavailable, darkSurface);
+            return paintIcon([&color](QPainter& painter) { paintBarredCircle(painter, color); });
+        }
         case domain::ProcessDetailsStatus::Available:
             break;
     }

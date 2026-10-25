@@ -11,6 +11,7 @@ package "app" $APP_COLOR {
 package "ui" $UI_COLOR {
     component "verdandi_ui\n<size:10>main window, tabs, process model</size>\n<size:10>Qt6::Widgets</size>" as uiTarget
     component "verdandi_ui_charts\n<size:10>SparklineWidget</size>\n<size:10>Qt6::Widgets</size>" as chartsTarget
+    component "verdandi_ui_theme\n<size:10>the colours that widgets draw</size>\n<size:10>Qt6::Gui</size>" as themeTarget
 }
 
 package "persistence" $PERSISTENCE_COLOR {
@@ -36,8 +37,11 @@ appLibraries --> persistenceTarget
 appLibraries --> monitoringTarget
 appLibraries --> platformTarget
 uiTarget --> chartsTarget
+uiTarget --> themeTarget
 uiTarget --> domainTarget
+chartsTarget --> themeTarget
 chartsTarget --> domainTarget
+themeTarget --> domainTarget
 persistenceTarget --> domainTarget
 monitoringTarget --> interfacesTarget
 platformTarget --> interfacesTarget

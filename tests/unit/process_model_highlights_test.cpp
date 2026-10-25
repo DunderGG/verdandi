@@ -3,18 +3,24 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <QBrush>
+#include <QColor>
 #include <QFont>
+#include <QGuiApplication>
 #include <QList>
 #include <QModelIndex>
 #include <QObject>
+#include <QPalette>
 #include <QPersistentModelIndex>
 #include <QString>
 #include <QVariant>
 
 #include "domain/process_info.h"
+#include "domain/theme.h"
 #include "support/process_model_harness.h"
 #include "support/process_samples.h"
 #include "ui/process_model.h"
+#include "ui/theme/theme_colors.h"
 
 // ProcessModel: started and exited processes highlighted for a time, and
 // exited rows removed when their highlight ends.
@@ -23,6 +29,7 @@ using namespace verdandi::domain;
 using namespace verdandi::tests;
 using namespace std::chrono_literals;
 using verdandi::ui::ProcessModel;
+namespace theme = verdandi::ui::theme;
 
 namespace
 {
@@ -95,18 +102,19 @@ TEST(ProcessModel, Highlights_ExitedProcess_TintedItalicWithToolTipThenRemoved)
     EXPECT_EQ(model.rowCount(), 1);
 }
 
-TEST(ProcessModel, Highlights_StartedAndExitedTintsDiffer)
+TEST(ProcessModel, Highlights_StartedAndExited_TheThemesTintsForTheRows)
 {
     ProcessModel model;
     model.updateProcesses({process(4, "System"), process(900, "old.exe")}, kNow);
 
     model.updateProcesses({process(4, "System"), process(950, "new.exe")}, kNow);
 
-    const QVariant exited = model.indexOf(process(900, "old.exe").identity()).data(Qt::BackgroundRole);
-    const QVariant started = model.indexOf(process(950, "new.exe").identity()).data(Qt::BackgroundRole);
-    EXPECT_TRUE(exited.isValid());
-    EXPECT_TRUE(started.isValid());
-    EXPECT_NE(exited, started);
+    const QBrush exited = model.indexOf(process(900, "old.exe").identity()).data(Qt::BackgroundRole).value<QBrush>();
+    const QBrush started = model.indexOf(process(950, "new.exe").identity()).data(Qt::BackgroundRole).value<QBrush>();
+    const QColor rows = QGuiApplication::palette().color(QPalette::Base);
+    EXPECT_EQ(exited.color(), theme::color(ThemeColorRole::ProcessExited, rows));
+    EXPECT_EQ(started.color(), theme::color(ThemeColorRole::ProcessStarted, rows));
+    EXPECT_NE(exited.color(), started.color());
 }
 
 TEST(ProcessModel, Highlights_ExitedProcessListedAgain_NoLongerMarked)

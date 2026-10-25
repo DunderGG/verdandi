@@ -18,6 +18,25 @@ namespace verdandi::tests
 /** WCAG's minimum contrast ratio for normal text (level AA). */
 inline constexpr double kMinimumTextContrast = 4.5;
 
+/** WCAG's minimum contrast ratio for graphics that convey information, such as icons (level AA). */
+inline constexpr double kMinimumGraphicsContrast = 3.0;
+
+/**
+ * The text, window and base colours of Qt's light and dark Windows palettes
+ * with the windows11 style, which draws the pages on the base colour.
+ */
+struct SchemeColors
+{
+    QColor text{};
+    QColor window{};
+    QColor base{};
+};
+
+inline const SchemeColors kLightScheme{
+    .text = QColor(0x00, 0x00, 0x00), .window = QColor(0xf3, 0xf3, 0xf3), .base = QColor(0xff, 0xff, 0xff)};
+inline const SchemeColors kDarkScheme{
+    .text = QColor(0xff, 0xff, 0xff), .window = QColor(0x1e, 0x1e, 0x1e), .base = QColor(0x2d, 0x2d, 0x2d)};
+
 /** WCAG's relative luminance of an opaque colour. */
 inline double relativeLuminance(const QColor& color)
 {

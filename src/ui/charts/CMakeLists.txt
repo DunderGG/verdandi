@@ -20,4 +20,6 @@ target_link_libraries(verdandi_ui_charts
     PUBLIC
         Qt6::Widgets
         verdandi_domain
+    PRIVATE
+        verdandi_ui_theme
 )

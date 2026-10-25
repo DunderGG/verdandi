@@ -14,6 +14,9 @@
 #include <QPalette>
 #include <QPen>
 
+#include "domain/theme.h"
+#include "ui/theme/theme_colors.h"
+
 namespace verdandi::ui::charts
 {
 
@@ -28,11 +31,9 @@ constexpr qreal kLineWidth = 1.5;
 constexpr qreal kDenseLineWidth = 1.0;
 
 // Grid: vertical lines every capacity / kVerticalGridDivisions samples, fixed
-// horizontal lines at quarters of the range. Hairlines in the text colour at
-// low opacity so the grid stays recessive on light and dark backgrounds.
+// horizontal lines at quarters of the range, as hairlines.
 constexpr std::size_t kVerticalGridDivisions = 10;
 constexpr int kHorizontalGridDivisions = 4;
-constexpr qreal kGridAlpha = 0.15;
 
 // Axis labels and min/max text: the text colour, dimmed so the current values stand out.
 constexpr qreal kMutedTextAlpha = 0.6;
@@ -47,12 +48,12 @@ constexpr qreal kLabelGap = 4.0;
 constexpr qreal kLegendEntryGap = 12.0;
 constexpr qreal kLegendKeyWidth = 10.0;
 
-// Categorical series colours, light and dark steps of the same hues. The order
-// was checked for adjacent-pair separation under colour-vision deficiency on
-// both surfaces. Red, amber, and green are left out: they are the health
-// status colours (see text_tone.cpp).
-constexpr std::array<QRgb, 5> kLightSeriesColors{0xff2a78d6, 0xffeb6834, 0xff1baf7a, 0xff4a3aa7, 0xffe87ba4};
-constexpr std::array<QRgb, 5> kDarkSeriesColors{0xff3987e5, 0xffd95926, 0xff199e70, 0xff9085e9, 0xffd55181};
+// The theme's line colours, in the order that series take them (DC-150).
+constexpr std::array kSeriesColorRoles{
+    domain::ThemeColorRole::ChartLine1, domain::ThemeColorRole::ChartLine2, domain::ThemeColorRole::ChartLine3,
+    domain::ThemeColorRole::ChartLine4, domain::ThemeColorRole::ChartLine5,
+};
+// Shared by the series beyond the theme's lines, rather than a repeated hue.
 constexpr QRgb kOverflowSeriesColor = 0xff898781;
 
 // The text of a missing current value. ui/charts does not depend on ui, so
@@ -284,8 +285,8 @@ QString formatHistoryWindow(std::chrono::seconds window)
 
 QColor defaultSeriesColor(std::size_t index, bool darkSurface)
 {
-    const auto& colors = darkSurface ? kDarkSeriesColors : kLightSeriesColors;
-    return QColor(index < colors.size() ? colors[index] : kOverflowSeriesColor);
+    return index < kSeriesColorRoles.size() ? theme::color(kSeriesColorRoles[index], darkSurface)
+                                            : QColor(kOverflowSeriesColor);
 }
 
 SparklineWidget::SparklineWidget(QWidget* parent) : QWidget(parent), m_series(1), m_formatter(defaultFormat)
@@ -348,6 +349,11 @@ QColor SparklineWidget::seriesColor(std::size_t series) const
     assert(series < m_series.size() && "sparkline series index out of range");
     const auto& entry = m_series[series];
     return entry.color ? *entry.color : defaultSeriesColor(entry.colorSlot.value_or(series), hasDarkSurface());
+}
+
+QColor SparklineWidget::gridColor() const
+{
+    return theme::color(domain::ThemeColorRole::ChartGrid, hasDarkSurface());
 }
 
 void SparklineWidget::setSeriesLabel(std::size_t series, const QString& label)
@@ -600,7 +606,7 @@ void SparklineWidget::paintGrid(QPainter& painter, const QRectF& area) const
     // Hairlines without antialiasing stay crisp on whole pixels.
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing, false);
-    painter.setPen(QPen(withAlpha(palette().color(foregroundRole()), kGridAlpha), 1));
+    painter.setPen(QPen(gridColor(), 1));
 
     for (int division = 1; division < kHorizontalGridDivisions; ++division) {
         const qreal y = area.top() + area.height() * division / kHorizontalGridDivisions;
