@@ -26,12 +26,13 @@ struct Shades
 std::optional<Shades> shadesOf(ThemeColorRole role)
 {
     switch (role) {
-        // The palette gives these, and the cards take the pages' colour.
+        // The palette and the style give these, and the cards take the pages' colour.
         case ThemeColorRole::Window:
         case ThemeColorRole::Page:
         case ThemeColorRole::Card:
         case ThemeColorRole::Text:
         case ThemeColorRole::Accent:
+        case ThemeColorRole::TableHeader:
             return std::nullopt;
         // Categorical hues for a chart's series, in an order checked for
         // separation under colour-vision deficiency on both surfaces: blue,
@@ -90,6 +91,12 @@ domain::Theme& storedCustomColors()
 bool isDark(const QColor& background)
 {
     return background.lightnessF() < 0.5f;
+}
+
+QColor contrastingColor(const QColor& background, const QColor& first, const QColor& second)
+{
+    const bool firstIsLighter = first.lightnessF() > second.lightnessF();
+    return isDark(background) == firstIsLighter ? first : second;
 }
 
 std::optional<QColor> defaultColor(domain::ThemeColorRole role, bool darkSurface)

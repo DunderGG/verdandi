@@ -12,11 +12,11 @@ namespace verdandi::domain
 {
 
 /**
- * A colour of the monitor's theme, named by what it colours. The first five
- * are the palette's surfaces, text and accent, which Windows' palette gives
- * unless a theme or the user chooses them (DC-151). The others the widgets
- * draw themselves, and each has a shade for a light surface and one for a
- * dark surface (DC-150).
+ * A colour of the monitor's theme, named by what it colours. The first six
+ * are the palette's surfaces, text and accent, and the table headers, which
+ * Windows' palette and style give unless a theme or the user chooses them
+ * (DC-151, DC-155). The others the widgets draw themselves, and each has a
+ * shade for a light surface and one for a dark surface (DC-150).
  */
 enum class ThemeColorRole
 {
@@ -30,6 +30,8 @@ enum class ThemeColorRole
     Text,
     /** Selections, check boxes, and the current tab. */
     Accent,
+    /** The headers above the process list's columns. */
+    TableHeader,
     /** The charts' lines, in the order that a chart's series take them: CPU, memory and Receive take the first. */
     ChartLine1,
     ChartLine2,

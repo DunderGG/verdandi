@@ -88,13 +88,38 @@ TEST(ThemeColors, IsDark_LightnessBelowHalf)
     }
 }
 
-TEST(ThemeColors, DefaultColor_NoneForThePalettesRoles)
+TEST(ThemeColors, ContrastingColor_TheLighterOnDarkAndTheDarkerOnLight)
+{
+    const QColor navy(0x0f, 0x14, 0x26);
+    const QColor white(0xf2, 0xf4, 0xfa);
+    struct Case
+    {
+        const char* name{};
+        QColor background{};
+        QColor first{};
+        QColor second{};
+        QColor expected{};
+    };
+    const std::array cases{
+        Case{"light background, darker first", QColor(0xf4, 0xb7, 0x40), navy, white, navy},
+        Case{"light background, darker second", QColor(0xf4, 0xb7, 0x40), white, navy, navy},
+        Case{"dark background, lighter first", QColor(0x2d, 0x2d, 0x2d), white, navy, white},
+        Case{"dark background, lighter second", QColor(0x2d, 0x2d, 0x2d), navy, white, white},
+    };
+
+    for (const auto& [name, background, first, second, expected] : cases) {
+        SCOPED_TRACE(name);
+        EXPECT_EQ(contrastingColor(background, first, second), expected);
+    }
+}
+
+TEST(ThemeColors, DefaultColor_NoneForTheRolesThatThePaletteAndTheStyleGive)
 {
     for (std::size_t index = 0; index < verdandi::domain::kThemeColorRoleCount; ++index) {
         const auto role = static_cast<ThemeColorRole>(index);
         const bool isPaletteRole = role == ThemeColorRole::Window || role == ThemeColorRole::Page ||
                                    role == ThemeColorRole::Card || role == ThemeColorRole::Text ||
-                                   role == ThemeColorRole::Accent;
+                                   role == ThemeColorRole::Accent || role == ThemeColorRole::TableHeader;
         SCOPED_TRACE(index);
         EXPECT_EQ(defaultColor(role, false).has_value(), !isPaletteRole);
         EXPECT_EQ(defaultColor(role, true).has_value(), !isPaletteRole);

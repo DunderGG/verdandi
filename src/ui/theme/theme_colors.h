@@ -14,9 +14,17 @@ namespace verdandi::ui::theme
 [[nodiscard]] bool isDark(const QColor& background);
 
 /**
+ * Returns the one of first and second that stands out more on background:
+ * the lighter on a dark background, and the darker on a light one, by
+ * lightness. Text on a chosen colour, such as a table header's, takes the
+ * theme's text or window colour this way.
+ */
+[[nodiscard]] QColor contrastingColor(const QColor& background, const QColor& first, const QColor& second);
+
+/**
  * Returns the built-in colour of role on a dark or a light surface (DC-150),
- * or std::nullopt for Window, Page, Card, Text and Accent, which the palette
- * gives. Each role that has one has a shade for each surface: the status
+ * or std::nullopt for Window, Page, Card, Text, Accent and TableHeader, which
+ * the palette and the style give. Each role that has one has a shade for each surface: the status
  * colours reach WCAG's 4.5:1 for text, and the access icons its 3:1 for
  * graphics, on the window and base colours of the scheme that the surface
  * belongs to.

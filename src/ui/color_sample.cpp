@@ -54,6 +54,13 @@ const QString kCardText = "Text on a card";
 const QString kSampleText = "Sample text";
 const QString kSelectedText = "Selected";
 const QString kProcessText = "process.exe";
+const QString kNameText = "Name";
+const QString kCpuText = "CPU";
+
+// Where a table header's sample ends its first section, as a part of its width.
+constexpr qreal kHeaderSplit = 0.6;
+// A table header's dividers, as HeaderView draws them.
+constexpr float kDividerAlpha = 0.25f;
 
 // Draws a rounded surface filled with fill and edged with text.
 void drawSurface(QPainter& painter, const QRectF& rect, const QColor& fill, const QColor& text)
@@ -213,6 +220,20 @@ void ColorSample::paintEvent(QPaintEvent*)
             // The selected text that ThemeController sets with the accent.
             drawText(painter, inner, theme::isDark(color) ? QColor(Qt::white) : QColor(Qt::black), kSelectedText);
             break;
+        case ThemeColorRole::TableHeader: {
+            drawSurface(painter, area, colorOf(ThemeColorRole::Page), text);
+            painter.fillRect(inner, color);
+            // Two sections, in the colours that HeaderView paints them in.
+            const QColor names = theme::contrastingColor(color, text, colorOf(ThemeColorRole::Window));
+            QColor divider = names;
+            divider.setAlphaF(kDividerAlpha);
+            const qreal split = inner.left() + inner.width() * kHeaderSplit;
+            painter.setPen(divider);
+            painter.drawLine(QPointF(split, inner.top()), QPointF(split, inner.bottom()));
+            drawText(painter, QRectF(inner.topLeft(), QPointF(split, inner.bottom())), names, kNameText);
+            drawText(painter, QRectF(QPointF(split, inner.top()), inner.bottomRight()), names, kCpuText);
+            break;
+        }
         case ThemeColorRole::ChartLine1:
         case ThemeColorRole::ChartLine2:
         case ThemeColorRole::ChartLine3:

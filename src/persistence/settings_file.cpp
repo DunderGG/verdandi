@@ -79,6 +79,7 @@ constexpr std::array kThemeColorRoleNames{
     NamedValue<domain::ThemeColorRole>{"card", domain::ThemeColorRole::Card},
     NamedValue<domain::ThemeColorRole>{"text", domain::ThemeColorRole::Text},
     NamedValue<domain::ThemeColorRole>{"accent", domain::ThemeColorRole::Accent},
+    NamedValue<domain::ThemeColorRole>{"tableHeader", domain::ThemeColorRole::TableHeader},
     NamedValue<domain::ThemeColorRole>{"chartLine1", domain::ThemeColorRole::ChartLine1},
     NamedValue<domain::ThemeColorRole>{"chartLine2", domain::ThemeColorRole::ChartLine2},
     NamedValue<domain::ThemeColorRole>{"chartLine3", domain::ThemeColorRole::ChartLine3},

@@ -67,6 +67,10 @@ package "ui" $UI_COLOR {
 
     class ProcessSortFilterProxyModel <<QSortFilterProxyModel>>
 
+    class HeaderView <<QHeaderView>> {
+        sectionColor() : optional<QColor>
+    }
+
     class NetworkView <<QWidget>> {
         updateSnapshot(snapshot : SystemSnapshot)
     }
@@ -136,6 +140,7 @@ MainWindow *-- NetworkView
 PerformanceView *-- "4" PerformancePage
 pages -up-|> PerformancePage
 ProcessesView *-- ProcessModel
+ProcessesView *-- HeaderView
 ProcessesView *-- ProcessSortFilterProxyModel
 ProcessSortFilterProxyModel o-- ProcessModel : source
 ProcessesView o-- ProcessTerminator
@@ -150,6 +155,7 @@ DashboardView *-- SparklineWidget
 pages *-- SparklineWidget
 SparklineWidget ..> themeColor : line and grid colours,\nwhen it paints
 ProcessModel ..> themeColor : highlights and icons,\nfor the rows' base colour
+HeaderView ..> themeColor : the table header colour,\nwhen it paints
 ThemeController ..> themeColor : setCustomColors(),\nafter the palette roles
 themeColor ..> ThemeNotifier : colorsChanged(),\nfor the widgets that\nkeep a colour
 

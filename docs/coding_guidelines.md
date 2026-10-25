@@ -342,7 +342,7 @@ Reasons:
 
 - A colour that a widget draws where the palette has no role for it, such as a chart's line, a status or an icon, is a `domain::ThemeColorRole`. Take it from `ui::theme::color()` with the colour it is drawn on, whenever the widget paints or its palette changes. Never keep one from when the widget was built; an icon painted once is painted for both schemes and chosen when it is shown ([DC-150](design_decisions.md#dc-150)).
 - A graphic that tells something, such as an access icon, reaches WCAG's 3:1 for graphics on both schemes' window and base colours, which `theme_colors_test.cpp` checks.
-- A widget that keeps a colour of the theme, rather than taking it when it paints, takes it again on `ui::theme::ThemeNotifier::colorsChanged()`, which says that the chosen colours changed, with the theme or the user's choice, as `TonedLabel` and `CardFrame` do. A widget that takes its colours when it paints only needs painting again, as `SparklineWidget` does ([DC-151](design_decisions.md#dc-151)).
+- A widget that keeps a colour of the theme, rather than taking it when it paints, takes it again on `ui::theme::ThemeNotifier::colorsChanged()`, which says that the chosen colours changed, with the theme or the user's choice, as `TonedLabel` and `CardFrame` do. A widget that takes its colours when it paints only needs painting again, as `SparklineWidget` and `HeaderView` do ([DC-151](design_decisions.md#dc-151)).
 - The rules above are for the monitor's own colours. The colours that a user chooses are theirs, and the monitor does not check them.
 
 Reasons:

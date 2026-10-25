@@ -171,6 +171,7 @@ TEST(SettingsFile, ParseSettings_ThemeColorRoleNames_ReadAsTheirRoles)
         Case{"card", ThemeColorRole::Card},
         Case{"text", ThemeColorRole::Text},
         Case{"accent", ThemeColorRole::Accent},
+        Case{"tableHeader", ThemeColorRole::TableHeader},
         Case{"chartLine1", ThemeColorRole::ChartLine1},
         Case{"chartLine2", ThemeColorRole::ChartLine2},
         Case{"chartLine3", ThemeColorRole::ChartLine3},

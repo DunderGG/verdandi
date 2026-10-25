@@ -21,12 +21,12 @@ namespace verdandi::ui
 using SampleColors = std::array<QColor, domain::kThemeColorRoleCount>;
 
 /**
- * A sample of one colour of a theme, drawn as the monitor draws it (DC-151):
+ * A sample of one colour of a theme, drawn as the monitor draws it (DC-154):
  * the window behind a menu's names, text on a page, a card on a page, a
- * selection in the accent, a chart's line or grid on a card, a status on a
- * card, a process row's highlight, or an access icon. It draws with the
- * colours it is given rather than the application's, so that the settings
- * dialog can show colours before they are applied.
+ * selection in the accent, a table header, a chart's line or grid on a card,
+ * a status on a card, a process row's highlight, or an access icon. It draws
+ * with the colours it is given rather than the application's, so that the
+ * settings dialog can show colours before they are applied.
  *
  * Not thread-safe; use only on the UI thread.
  */

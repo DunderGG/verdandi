@@ -25,6 +25,7 @@
 
 #include "domain/process_identity.h"
 #include "ui/dashboard_formatting.h"
+#include "ui/header_view.h"
 #include "ui/process_formatting.h"
 #include "ui/process_model.h"
 #include "ui/process_sort_filter_proxy_model.h"
@@ -191,6 +192,13 @@ ProcessesView::ProcessesView(QWidget* parent) : QWidget(parent)
     m_proxyModel->setSourceModel(m_model);
 
     m_treeView = new QTreeView(this);
+    // A header that paints itself in the theme's table header colour
+    // (DC-155), set up as QTreeView sets up its own.
+    auto* header = new HeaderView(Qt::Horizontal, m_treeView);
+    header->setSectionsMovable(true);
+    header->setStretchLastSection(true);
+    header->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    m_treeView->setHeader(header);
     m_treeView->setModel(m_proxyModel);
     m_treeView->setRootIsDecorated(false);
     m_treeView->setUniformRowHeights(true);

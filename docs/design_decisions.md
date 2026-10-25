@@ -104,6 +104,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-152](#dc-152): Theme files hold a version, a colour scheme and colours, read and written through functions that `main.cpp` gives the window
   - [DC-153](#dc-153): Themes ship as theme files in a themes folder beside `verdandi.exe`, named after their files, starting with Verdandi
   - [DC-154](#dc-154): Each colour of the Appearance tab has a sample drawn as the monitor draws it, with the dialog's colours and Windows' palette for the theme's scheme
+  - [DC-155](#dc-155): Table headers are `ui::HeaderView`s, which paint their sections in a chosen header colour and leave them to the style otherwise
 - [Dashboard tab](#dashboard-tab)
   - [DC-45](#dc-45): Health evaluation: domain types, a pure evaluator in `monitoring`, and the result carried in the snapshot
   - [DC-46](#dc-46): Dashboard cards: `ResourceCard` widgets fed by pure formatting helpers
@@ -1012,13 +1013,13 @@ The colour scheme that the monitor draws in, the colours that its widgets draw t
 <a id="dc-151"></a>
 ### DC-151: A theme's colours and the user's in each theme: palette roles through the application palette, the others through `ui::theme` and a notifier
 
-**Decision:** A theme chooses an optional colour for each `domain::ThemeColorRole`, including the window, pages, cards, text and accent; Light and Dark choose none. `domain::Settings::themeColors` holds the user's colours in each theme, by its name, in place of its own; Follow Windows takes Light's or Dark's. `ui::ThemeController` sets the drawn theme's window, base, text and accent colours in the application palette, starting again from the scheme's own palette each time, then gives every chosen colour, with its scheme, to `ui::theme`, whose `color()` takes it before the built-in shade on that scheme's surfaces, keeping the shade's opacity. `theme::ThemeNotifier` tells the widgets that keep a colour. Cards are `ui::CardFrame`s, painted in the chosen card colour or the page's. A contrast theme replaces every chosen colour. The settings dialog's Appearance tab has a button for each role of the theme shown, whose default is the theme's own colour.
+**Decision:** A theme chooses an optional colour for each `domain::ThemeColorRole`, including the window, pages, cards, text and accent; Light and Dark choose none. `domain::Settings::themeColors` holds the user's colours in each theme, by its name, in place of its own; Follow Windows takes Light's or Dark's. `ui::ThemeController` sets the drawn theme's window, base, text and accent colours in the application palette, starting again from the scheme's own palette each time, then gives every chosen colour, with its scheme, to `ui::theme`, whose `color()` takes it before the built-in shade on that scheme's surfaces, keeping the shade's opacity. `theme::ThemeNotifier` tells the widgets that keep a colour. Cards are `ui::CardFrame`s, painted in the chosen card colour or the page's, and table headers `ui::HeaderView`s ([DC-155](#dc-155)). A contrast theme replaces every chosen colour. The settings dialog's Appearance tab has a button for each role of the theme shown, whose default is the theme's own colour.
 
 **Rationale:** A colour chosen in one theme suits no other, so each theme keeps the user's, and changing theme loses none. A role that neither chooses keeps Windows' colour, such as its accent, or the monitor's shade. Qt's styles draw from the application palette, so the palette's roles go there, and starting from the scheme's palette returns an unchosen role to Windows'. The monitor's widgets draw the other colours as they paint, so a process-wide value and a signal suffice, and the chart widgets may not depend on the rest of `ui`. Cards painted by the monitor look alike in every style. Keeping the opacity leaves the highlights tints. A theme has one scheme, so the list has one column.
 
-**Consequences:** The monitor does not check a chosen colour's contrast. The windows11 style still draws some parts, such as button fills, frames and table headers, in its own colours for the scheme.
+**Consequences:** The monitor does not check a chosen colour's contrast. The windows11 style still draws some parts, such as button fills and frames, in its own colours for the scheme.
 
-**History:** Dark mode and theme support, colours that the user chooses; Dark mode and theme support, themes (the user's colours in each theme, in one column).
+**History:** Dark mode and theme support, colours that the user chooses; Dark mode and theme support, themes (the user's colours in each theme, in one column); Dark mode and theme support, themes (table headers).
 
 ---
 
@@ -1049,13 +1050,26 @@ The colour scheme that the monitor draws in, the colours that its widgets draw t
 <a id="dc-154"></a>
 ### DC-154: Each colour of the Appearance tab has a sample drawn as the monitor draws it, with the dialog's colours and Windows' palette for the theme's scheme
 
-**Decision:** Beside each colour button, a `ui::ColorSample` draws its role where the monitor draws it: the window behind menu names, text on a page, a card on a page, a selection, a chart's line or grid on a card, a status on a card, a process row's tint, or an access icon. The samples draw with the colours that the list shows, the user's or the theme's, translucent roles with their built-in opacity, rather than the application's. For the palette's roles that neither chose, they take Windows' palette for the theme's scheme, which `ui::ThemeController::windowsPalette()` keeps for each scheme it has drawn in; for another, it stands in Qt's windows11 window, base and text colours, with the accent it has. The dialog redraws them when a colour or the theme shown changes.
+**Decision:** Beside each colour button, a `ui::ColorSample` draws its role where the monitor draws it: the window behind menu names, text on a page, a card on a page, a selection, a table header, a chart's line or grid on a card, a status on a card, a process row's tint, or an access icon. The samples draw with the colours that the list shows, the user's or the theme's, translucent roles with their built-in opacity, rather than the application's. For the palette's roles that neither chose, they take Windows' palette for the theme's scheme, which `ui::ThemeController::windowsPalette()` keeps for each scheme it has drawn in; for another, it stands in Qt's windows11 window, base and text colours, with the accent it has. The dialog redraws them when a colour or the theme shown changes.
 
 **Rationale:** A swatch says little about how a colour reads; drawn on its surface, text that is too dark for its page shows at once, before OK. Nothing applies until OK ([DC-124](#dc-124)), so the samples cannot take the application's colours, which may be another theme's. Qt gives no palette for a scheme it is not drawing, and asking it for one would restyle every widget, so the controller keeps each palette it draws in; Qt's colours for the other are those that the built-in shades are checked against ([DC-150](#dc-150)).
 
 **Consequences:** Until the monitor draws in a scheme, its samples show Qt's colours for it rather than Windows', and the other scheme's accent.
 
-**History:** Dark mode and theme support, themes (a sample beside each colour).
+**History:** Dark mode and theme support, themes (a sample beside each colour); Dark mode and theme support, themes (the table header's sample).
+
+---
+
+<a id="dc-155"></a>
+### DC-155: Table headers are `ui::HeaderView`s, which paint their sections in a chosen header colour and leave them to the style otherwise
+
+**Decision:** `domain::ThemeColorRole::TableHeader` colours the headers above a table's columns; it has no built-in shade, and Verdandi chooses the logo's gold. The process list's header is a `ui::HeaderView`, set up as `QTreeView` sets up its own. While a theme or the user chooses a header colour for the scheme of its window, it paints each section itself: it fills it with the colour, edges it with the name colour at a quarter opacity, and has the style draw the name and the sort arrow in the theme's text or window colour, whichever stands out more on it (`ui::theme::contrastingColor()`). Otherwise the style draws the header. It paints again when the chosen colours change.
+
+**Rationale:** The styles draw headers in different ways: windows11 fills a section with the palette's button colour, Fusion with a gradient of it, and windowsvista with Windows' own theme parts, which ignore the palette. The application's button colour would also colour every button that Fusion draws. Painting the section, as a `ui::CardFrame` paints a card ([DC-151](#dc-151)), gives the chosen colour in every style, and the style still draws the name and the arrow, so they keep its font, elision and sort glyph. Leaving an unchosen header to the style keeps Light and Dark as Windows draws them. Of the theme's own text and window colours, one is light and the other dark, so one of them stands out on any header colour; on Verdandi's gold the navy window colour reaches about 10:1.
+
+**Consequences:** A chosen header has no hover or pressed look. A new table needs a `HeaderView` to take the colour.
+
+**History:** Dark mode and theme support, themes (table headers in the theme's colour).
 
 ---
 

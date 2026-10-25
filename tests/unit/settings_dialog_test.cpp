@@ -101,6 +101,7 @@ QPalette windowsPalette(ColorScheme scheme)
     palette.setColor(QPalette::Base, isDark ? QColor(0x22, 0x22, 0x22) : QColor(0xfe, 0xfe, 0xfe));
     palette.setColor(QPalette::WindowText, isDark ? QColor(0xdd, 0xdd, 0xdd) : QColor(0x01, 0x01, 0x01));
     palette.setColor(QPalette::Accent, QColor(0x33, 0x66, 0xcc));
+    palette.setColor(QPalette::Button, isDark ? QColor(0x33, 0x33, 0x33) : QColor(0xf0, 0xf0, 0xf0));
     return palette;
 }
 
@@ -279,6 +280,7 @@ TEST(SettingsDialog, ColorSamples_BesideEachButtonInTheColoursOfTheThemeShown)
         Case{"Windows' window", ThemeColorRole::Window, QColor(0x11, 0x11, 0x11)},
         Case{"Windows' base", ThemeColorRole::Page, QColor(0x22, 0x22, 0x22)},
         Case{"Windows' text", ThemeColorRole::Text, QColor(0xdd, 0xdd, 0xdd)},
+        Case{"Windows' button colour for the table headers", ThemeColorRole::TableHeader, QColor(0x33, 0x33, 0x33)},
     };
     for (const auto& [name, role, expected] : cases) {
         SCOPED_TRACE(name);

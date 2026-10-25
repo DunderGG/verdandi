@@ -106,6 +106,9 @@ constexpr std::array kColorRows{
     ColorRow{nullptr, domain::ThemeColorRole::Text, "Text", "Windows' colour unless chosen."},
     ColorRow{nullptr, domain::ThemeColorRole::Accent, "Accent",
              "Selections, check boxes and the current tab. Windows' accent colour unless chosen."},
+    ColorRow{nullptr, domain::ThemeColorRole::TableHeader, "Table headers",
+             "The names above the process list's columns, in the text or the window colour. Windows' colour "
+             "unless chosen."},
     ColorRow{"Charts", domain::ThemeColorRole::ChartLine1, "Line 1",
              "Every chart's first line: CPU, memory, receive, and the first disk volume"},
     ColorRow{nullptr, domain::ThemeColorRole::ChartLine2, "Line 2", "Send, and the second disk volume"},
@@ -619,6 +622,8 @@ void SettingsDialog::showSampleColors()
     fill(domain::ThemeColorRole::Page, windows.color(QPalette::Base));
     fill(domain::ThemeColorRole::Text, windows.color(QPalette::WindowText));
     fill(domain::ThemeColorRole::Accent, windows.color(QPalette::Accent));
+    // The styles draw a header as the button colour, or as near it as Windows' own parts are.
+    fill(domain::ThemeColorRole::TableHeader, windows.color(QPalette::Button));
     fill(domain::ThemeColorRole::Card, colors[static_cast<std::size_t>(domain::ThemeColorRole::Page)]);
 
     for (ColorSample* sample : m_colorSamples) {

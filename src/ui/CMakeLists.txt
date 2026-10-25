@@ -19,6 +19,8 @@ add_library(verdandi_ui STATIC
     dashboard_view.h
     disk_performance_page.cpp
     disk_performance_page.h
+    header_view.cpp
+    header_view.h
     main_window.cpp
     main_window.h
     memory_performance_page.cpp

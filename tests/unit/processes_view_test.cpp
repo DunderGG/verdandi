@@ -26,6 +26,7 @@
 #include "domain/system_snapshot.h"
 #include "support/process_samples.h"
 #include "support/snapshots.h"
+#include "ui/header_view.h"
 #include "ui/process_formatting.h"
 #include "ui/process_model.h"
 #include "ui/process_sort_filter_proxy_model.h"
@@ -44,6 +45,19 @@ TEST(ProcessesView, Construction_TreeViewShowsTheModelThroughTheProxyAsAFlatTabl
     EXPECT_EQ(view.proxyModel()->sourceModel(), view.model());
     EXPECT_FALSE(view.treeView()->rootIsDecorated());
     EXPECT_EQ(view.summaryText(), processListSummary(std::nullopt, false));
+}
+
+TEST(ProcessesView, Construction_HeaderIsAHeaderViewSetUpAsATreeViewsOwn)
+{
+    const ProcessesView view;
+
+    const auto* header = qobject_cast<const HeaderView*>(view.treeView()->header());
+
+    ASSERT_NE(header, nullptr);
+    EXPECT_EQ(header->parent(), view.treeView());
+    EXPECT_TRUE(header->sectionsMovable());
+    EXPECT_TRUE(header->sectionsClickable());
+    EXPECT_EQ(header->defaultAlignment(), Qt::AlignLeft | Qt::AlignVCenter);
 }
 
 TEST(ProcessesView, Construction_SortableAndSortedByName)
