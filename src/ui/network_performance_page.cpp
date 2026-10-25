@@ -39,6 +39,8 @@ NetworkPerformancePage::NetworkPerformancePage(QWidget* parent) : PerformancePag
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setFrameShape(QFrame::NoFrame);
+    // The page shows through, as in the Network tab's list of adapters.
+    m_scrollArea->viewport()->setAutoFillBackground(false);
     // The charts and readouts always fit the width (readouts re-flow), so
     // only vertical scrolling is needed.
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);

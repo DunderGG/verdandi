@@ -3,6 +3,7 @@
 #include <string_view>
 
 #include <QObject>
+#include <QString>
 
 namespace verdandi::ui
 {
@@ -15,6 +16,14 @@ namespace verdandi::ui
  * Dark, or Unknown while a Windows contrast theme is on, whose own colours
  * then replace both.
  *
+ * Qt's windowsvista style, which it picks on Windows 10, draws only the light
+ * scheme. While the scheme is dark, the controller replaces it with Fusion,
+ * which draws the dark palette, and makes the palette's window and base
+ * colours explicit, so that Fusion draws the widgets with the application's
+ * palette rather than the Windows theme's per-class palettes (DC-148). When
+ * the scheme turns light, and when the controller is destroyed, it gives the
+ * application back its style and palette.
+ *
  * One controller serves the whole application: main.cpp creates it before
  * the main window, so that it outlives every window.
  *
@@ -25,9 +34,9 @@ class ThemeController : public QObject
     Q_OBJECT
 
 public:
-    /** Requires a QApplication. */
+    /** Requires a QApplication. Replaces the style at once if the scheme is dark and the style draws only light. */
     explicit ThemeController(QObject* parent = nullptr);
-    ~ThemeController() override = default;
+    ~ThemeController() override;
 
     /** Returns the scheme that the application draws in now. */
     [[nodiscard]] Qt::ColorScheme colorScheme() const;
@@ -35,6 +44,16 @@ public:
 signals:
     /** Emitted with the new scheme when the scheme that the application draws in changes. */
     void colorSchemeChanged(Qt::ColorScheme scheme);
+
+private:
+    // Draws the application in scheme: Fusion in place of a style that draws
+    // only light while scheme is dark, and the application's own style otherwise.
+    void applyColorScheme(Qt::ColorScheme scheme);
+    // Gives the application back the style that Fusion replaced, and its palette.
+    void restoreStyle();
+
+    // The name of the style that Fusion replaces while the scheme is dark; empty while none is replaced.
+    QString m_replacedStyle;
 };
 
 /**

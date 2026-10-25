@@ -6,6 +6,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPalette>
 #include <QRect>
 #include <QScreen>
 #include <QSize>
@@ -73,6 +74,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     m_tabWidget->addTab(m_performanceView, "Performance");
     m_tabWidget->addTab(m_processesView, "Processes");
     m_tabWidget->addTab(m_networkView, "Network");
+
+    // Each page is drawn in the palette's base colour, which the text colours
+    // are checked against, whatever the style draws behind it: Fusion, which
+    // draws the dark scheme on Windows 10, fills tab pages with a lighter
+    // colour (DC-148). The widgets on a page inherit the background role, so
+    // they pick their colours by the base colour too.
+    for (QWidget* page : {static_cast<QWidget*>(m_dashboardView), static_cast<QWidget*>(m_performanceView),
+                          static_cast<QWidget*>(m_processesView), static_cast<QWidget*>(m_networkView)}) {
+        page->setBackgroundRole(QPalette::Base);
+        page->setAutoFillBackground(true);
+    }
 
     setCentralWidget(m_tabWidget);
 

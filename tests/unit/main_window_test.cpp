@@ -8,7 +8,10 @@
 #include <QAction>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
+#include <QImage>
 #include <QMessageBox>
+#include <QPalette>
+#include <QPoint>
 #include <QPushButton>
 #include <QString>
 #include <QTabWidget>
@@ -17,6 +20,7 @@
 #include "domain/settings.h"
 #include "domain/system_snapshot.h"
 #include "monitoring/sampling_scheduler.h"
+#include "support/appearance.h"
 #include "support/fake_collectors.h"
 #include "support/settings_samples.h"
 #include "ui/dashboard_formatting.h"
@@ -81,6 +85,32 @@ TEST(MainWindow, Construction_InitializesFourTabsInExpectedOrder)
     EXPECT_NE(mainWindow.performanceView(), nullptr);
     EXPECT_NE(mainWindow.processesView(), nullptr);
     EXPECT_NE(mainWindow.networkView(), nullptr);
+}
+
+TEST(MainWindow, EveryAppearance_PagesDrawnInTheBaseColour)
+{
+    for (const auto& appearance : verdandi::tests::kAppearances) {
+        SCOPED_TRACE(appearance.name);
+        const verdandi::tests::ScopedAppearance scopedAppearance(appearance);
+        MainWindow mainWindow;
+        mainWindow.setAttribute(Qt::WA_DontShowOnScreen);
+        mainWindow.resize(1024, 720);
+        mainWindow.show();
+
+        for (int tab = 0; tab < mainWindow.tabWidget()->count(); ++tab) {
+            SCOPED_TRACE(mainWindow.tabWidget()->tabText(tab).toStdString());
+            mainWindow.tabWidget()->setCurrentIndex(tab);
+            QCoreApplication::processEvents();
+            QImage image(mainWindow.size(), QImage::Format_ARGB32_Premultiplied);
+            mainWindow.render(&image);
+
+            // Within the page's margin, which no widget covers.
+            const QWidget* page = mainWindow.tabWidget()->widget(tab);
+            const QPoint margin = page->mapTo(&mainWindow, QPoint(2, 2));
+            EXPECT_EQ(image.pixelColor(margin).name().toStdString(),
+                      page->palette().color(QPalette::Base).name().toStdString());
+        }
+    }
 }
 
 TEST(MainWindow, OnSnapshotReady_ForwardsProcessListToProcessesView)

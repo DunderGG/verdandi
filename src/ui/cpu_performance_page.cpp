@@ -55,6 +55,8 @@ CpuPerformancePage::CpuPerformancePage(QWidget* parent) : PerformancePage("CPU",
     m_coreScrollArea = new QScrollArea(this);
     m_coreScrollArea->setWidgetResizable(true);
     m_coreScrollArea->setFrameShape(QFrame::NoFrame);
+    // The page shows through, as in the Network tab's list of adapters.
+    m_coreScrollArea->viewport()->setAutoFillBackground(false);
     m_coreScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     contentLayout()->addWidget(m_coreScrollArea, 2);
 }

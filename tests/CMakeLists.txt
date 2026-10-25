@@ -35,7 +35,7 @@ endfunction()
 add_executable(verdandi_tests
     test_main.cpp
     support/adapter_lists.h
-    support/color_scheme.h
+    support/appearance.h
     support/fake_collectors.h
     support/fake_subscription.h
     support/log_capture.h

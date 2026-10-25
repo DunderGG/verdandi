@@ -369,7 +369,7 @@ Each action needs an access right beyond `PROCESS_QUERY_LIMITED_INFORMATION`, so
 ### Dark mode and theme support
 
 - [x] Detect the Windows system theme (light/dark) at startup. Qt reads the colour scheme that Windows sets for applications, or a contrast theme, when the `QApplication` starts and after every change, so the first frame is drawn in it. `ui::ThemeController`, which `main.cpp` creates before the window, follows it, and the log names it at startup and after each change ([DC-147](docs/design_decisions.md#dc-147)).
-- [ ] 🟡 Apply a dark stylesheet/palette when dark mode is active.
+- [x] Apply a dark stylesheet/palette when dark mode is active. On Windows 11, Qt's windows11 style draws the dark palette that Qt gives the application. The windowsvista style, which Qt picks on Windows 10, draws only light, so while the scheme is dark `ui::ThemeController` replaces it with Fusion and sets the palette's window and base colours. Each tab's page fills itself with the base colour, so that pages are the same colour, and their text as readable, in every style ([DC-148](docs/design_decisions.md#dc-148)).
 - [ ] 🟡 Add a setting to override: Light / Dark / Follow System.
 - [ ] 🟡 Ensure sparkline charts and all custom widgets respect the active theme.
 - [ ] 🔵 Add support for customizing the theme colors for all widgets, including sparklines and adapter cards.

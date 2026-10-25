@@ -79,6 +79,9 @@ NetworkView::NetworkView(QWidget* parent) : QWidget(parent)
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setFrameShape(QFrame::NoFrame);
+    // The page shows through, as the windows11 style draws it, rather than
+    // the window colour that Fusion fills a scroll area with.
+    m_scrollArea->viewport()->setAutoFillBackground(false);
     // The cards always fit the width, so only vertical scrolling is needed.
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     auto* cardList = new QWidget(m_scrollArea);

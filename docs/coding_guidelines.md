@@ -327,7 +327,7 @@ Reasons:
 
 ### Text colours
 
-- Text must reach WCAG's 4.5:1 contrast in both the light and the dark colour scheme, on the background it is actually drawn on. With the windows11 style, tab pages and cards are drawn in the palette's base colour, not its window colour.
+- Text must reach WCAG's 4.5:1 contrast in both the light and the dark colour scheme, on the background it is actually drawn on. Tab pages are drawn in the palette's base colour, not its window colour, in every style ([DC-148](design_decisions.md#dc-148)), and with the windows11 style so are the cards.
 - Draw dimmed or status text with a `TextTone` (`ui/text_tone.h`): a `TonedLabel`, or `textToneColor()` and `dimmedTextColor()` where there is no label, such as an item model's foreground. Do not use `palette(mid)` or another frame colour for text, nor a fixed colour that suits only one scheme, nor a style sheet colour, which does not follow a change of scheme.
 - A new tone needs a shade for each scheme, and `text_tone_test.cpp` checks every tone against both schemes' window and base colours.
 

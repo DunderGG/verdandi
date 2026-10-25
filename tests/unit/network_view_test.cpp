@@ -15,7 +15,7 @@
 
 #include "domain/settings.h"
 #include "domain/system_snapshot.h"
-#include "support/color_scheme.h"
+#include "support/appearance.h"
 #include "support/network_samples.h"
 #include "support/readouts.h"
 #include "support/snapshots.h"
@@ -546,9 +546,9 @@ TEST(NetworkView, MarkupInNamesAndDescription_WindowMinimumSizeStaysWithin800x60
     EXPECT_EQ(mainWindow.size(), QSize(800, 600));
 }
 
-TEST(NetworkView, Card_StatusDescriptionAndReadoutNamesReadableInBothColourSchemes)
+TEST(NetworkView, Card_StatusDescriptionAndReadoutNamesReadableInEveryAppearance)
 {
-    // One window for both schemes, so the colours must follow a change of scheme.
+    // One window for every appearance, so the colours must follow a change of scheme and of style.
     MainWindow mainWindow;
     mainWindow.setAttribute(Qt::WA_DontShowOnScreen);
     // Tall enough that both cards are in view, so every label is rendered.
@@ -561,8 +561,9 @@ TEST(NetworkView, Card_StatusDescriptionAndReadoutNamesReadableInBothColourSchem
     wifi.description = "RZ616 Wi-Fi 6E 160MHz";
     mainWindow.onSnapshotReady(snapshotWithNetworks(std::vector<NetworkSample>{ethernet, wifi}));
 
-    for (const auto scheme : {Qt::ColorScheme::Light, Qt::ColorScheme::Dark}) {
-        const verdandi::tests::ScopedColorScheme colorScheme(scheme);
+    for (const auto& appearance : verdandi::tests::kAppearances) {
+        SCOPED_TRACE(appearance.name);
+        const verdandi::tests::ScopedAppearance scopedAppearance(appearance);
         QCoreApplication::processEvents();
 
         const NetworkView* view = mainWindow.networkView();
@@ -576,7 +577,6 @@ TEST(NetworkView, Card_StatusDescriptionAndReadoutNamesReadableInBothColourSchem
                                          static_cast<const QWidget*>(readoutNames.front())}) {
                 EXPECT_GE(verdandi::tests::renderedTextContrast(mainWindow, *label),
                           verdandi::tests::kMinimumTextContrast)
-                    << (scheme == Qt::ColorScheme::Dark ? "dark: " : "light: ")
                     << qobject_cast<const QLabel*>(label)->text().toStdString();
             }
         }

@@ -15,7 +15,7 @@
 #include "domain/health_status.h"
 #include "domain/settings.h"
 #include "domain/system_snapshot.h"
-#include "support/color_scheme.h"
+#include "support/appearance.h"
 #include "support/snapshots.h"
 #include "support/text_contrast.h"
 #include "ui/charts/sparkline_widget.h"
@@ -400,10 +400,11 @@ TEST(DashboardView, Sparklines_PercentFixedRangeNetworkAutoRange)
     EXPECT_TRUE(dashboard.networkSparkline()->isAutoRange());
 }
 
-TEST(DashboardView, CardStatuses_ReadableInBothColourSchemes)
+TEST(DashboardView, CardStatuses_ReadableInEveryAppearance)
 {
-    for (const auto scheme : {Qt::ColorScheme::Light, Qt::ColorScheme::Dark}) {
-        const verdandi::tests::ScopedColorScheme colorScheme(scheme);
+    for (const auto& appearance : verdandi::tests::kAppearances) {
+        SCOPED_TRACE(appearance.name);
+        const verdandi::tests::ScopedAppearance scopedAppearance(appearance);
         verdandi::ui::MainWindow mainWindow;
         mainWindow.setAttribute(Qt::WA_DontShowOnScreen);
         mainWindow.resize(1024, 720);
@@ -425,7 +426,7 @@ TEST(DashboardView, CardStatuses_ReadableInBothColourSchemes)
              {dashboard->cpuCard(), dashboard->memoryCard(), dashboard->diskCard(), dashboard->networkCard()}) {
             EXPECT_GE(verdandi::tests::renderedTextContrast(mainWindow, *card->statusLabel()),
                       verdandi::tests::kMinimumTextContrast)
-                << (scheme == Qt::ColorScheme::Dark ? "dark: " : "light: ") << card->statusText().toStdString();
+                << card->statusText().toStdString();
         }
         EXPECT_EQ(dashboard->networkCard()->statusLabel()->tone(), verdandi::ui::TextTone::Dimmed);
         EXPECT_TRUE(dashboard->networkCard()->statusLabel()->font().italic());

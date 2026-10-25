@@ -97,6 +97,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-128](#dc-128): Per-monitor DPI awareness (V2) declared in the application manifest, which Qt keeps
 - [Colour schemes and themes](#colour-schemes-and-themes)
   - [DC-147](#dc-147): The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
+  - [DC-148](#dc-148): The dark scheme on Windows 10 is drawn with Fusion, and every page in the palette's base colour
 - [Dashboard tab](#dashboard-tab)
   - [DC-45](#dc-45): Health evaluation: domain types, a pure evaluator in `monitoring`, and the result carried in the snapshot
   - [DC-46](#dc-46): Dashboard cards: `ResourceCard` widgets fed by pure formatting helpers
@@ -965,6 +966,19 @@ The colour scheme that the monitor draws in.
 
 ---
 
+<a id="dc-148"></a>
+### DC-148: The dark scheme on Windows 10 is drawn with Fusion, and every page in the palette's base colour
+
+**Decision:** While the colour scheme is dark, `ui::ThemeController` replaces the windowsvista style, which Qt picks on Windows 10, with Fusion, and gives it back when the scheme turns light or the controller is destroyed. While Fusion draws, it sets the application palette's window and base colours to those of Qt's dark palette. Each tab's page fills itself with the palette's base colour, and the scroll areas on the pages leave theirs unfilled. The windows11 style, which draws both schemes, is kept.
+
+**Rationale:** The windowsvista style draws with Windows' own theme parts, which exist only in light, and replaces a dark palette with the light one, so on Windows 10 the monitor stayed light under a dark title bar. Fusion is built into Qt Widgets and draws only from the palette, so it draws Qt's dark palette for Windows; the native look returns with the light scheme. Setting any role of the application palette drops the Windows theme's per-class palettes, which are made for the Windows styles: in the dark scheme the check-box palette's base is the accent colour, which Fusion would fill every unchecked box with. The window and base colours are the roles that the text colours are checked against. Fusion fills tab pages with a colour derived from the button colour, #4b4b4b in the dark scheme, on which the status colours fall below 4.5:1, and scroll areas with the window colour. A page that fills itself is #2d2d2d in every style, as windows11 draws it, and the widgets on it inherit the base colour as their background role, so they pick their colours by it.
+
+**Consequences:** On Windows 10 the dark scheme has Fusion's controls and metrics rather than Windows' own, so a layout can differ between the schemes there.
+
+**History:** Dark mode and theme support, a dark palette while the scheme is dark.
+
+---
+
 ## Dashboard tab
 
 The resource cards and the health evaluation they show.
@@ -1414,7 +1428,7 @@ How `verdandi.exe` starts, where its log goes, and what a second start does.
 <a id="dc-104"></a>
 ### DC-104: Qt's Windows style plugin deployed next to every executable (code review F-42)
 
-**Decision:** The top-level `CMakeLists.txt` defines `verdandi_deploy_qt_plugins()`, which copies two plugins next to an executable after it links: the Windows platform plugin into `platforms/`, as before, and `Qt6::QModernWindowsStylePlugin` (`qmodernwindowsstyle.dll`) into `styles/`. The app, the tests and both benchmarks call it, in place of three copies of the platform plugin's step. The app does not choose a style: Qt picks `windows11` on Windows 11 and `windowsvista` on Windows 10. The `QtConfiguration` tests fail if either style is missing.
+**Decision:** The top-level `CMakeLists.txt` defines `verdandi_deploy_qt_plugins()`, which copies two plugins next to an executable after it links: the Windows platform plugin into `platforms/`, as before, and `Qt6::QModernWindowsStylePlugin` (`qmodernwindowsstyle.dll`) into `styles/`. The app, the tests and both benchmarks call it, in place of three copies of the platform plugin's step. Qt picks the style: `windows11` on Windows 11 and `windowsvista` on Windows 10, which the monitor replaces with Fusion, built into Qt Widgets, only while it draws the dark scheme ([DC-148](#dc-148)). The `QtConfiguration` tests fail if either style is missing.
 
 **Rationale:** The style plugin is loaded at run time, like the platform plugin. Only the platform plugin was copied, though, and the comment on that step said it was the only one needed. Without a `styles` directory, Qt falls back to its built-in classic `windows` style: bevelled check boxes, scroll bars, tabs and frames, and that style's dark palette. vcpkg's qtbase port ships no `windeployqt`, so the build copies the plugins itself, and one function deploys a plugin added later to every executable at once.
 - **Tests and benchmarks get the same plugins** as the app, so that the layouts, colours and tick costs they measure are the ones the app shows.
@@ -1422,7 +1436,7 @@ How `verdandi.exe` starts, where its log goes, and what a second start does.
 - **Colours:** the style draws tab pages and card frames in the palette's base colour (#ffffff in the light scheme, #2d2d2d in the dark one), not the window colour. Its placeholder-text colour is the text colour at half opacity, which reaches only 4.0:1 on white. The [text colours](coding_guidelines.md#text-colours) are chosen against what this style draws.
 - **Cost:** the style costs the Network tab, and the Performance tab's network page, about 1 ms a tick; on the other pages the difference is lost in the noise ([performance.md](performance.md)).
 
-**History:** Code review F-42; maintenance (the figures moved to performance.md).
+**History:** Code review F-42; maintenance (the figures moved to performance.md); Dark mode and theme support (Fusion for the dark scheme on Windows 10).
 
 ---
 
