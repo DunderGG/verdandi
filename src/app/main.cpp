@@ -14,6 +14,7 @@
 
 #include "app_logging.h"
 #include "domain/settings.h"
+#include "domain/theme.h"
 #include "file_locations.h"
 #include "instance_server.h"
 #include "monitoring/sampling_scheduler.h"
@@ -27,6 +28,7 @@
 #include "ui/main_window.h"
 #include "ui/processes_view.h"
 #include "ui/theme_controller.h"
+#include "ui/theme_files.h"
 #include "verdandi_product_version.h"
 #include "verdandi_version.h"
 
@@ -97,6 +99,31 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
 
     verdandi::ui::MainWindow mainWindow;
     mainWindow.setSettings(settings);
+    // The settings dialog imports and exports theme files through these,
+    // since ui may not depend on persistence (DC-152).
+    mainWindow.setThemeFiles(verdandi::ui::ThemeFiles{
+        .importTheme =
+            [](const std::filesystem::path& path) {
+                const verdandi::persistence::ThemeReadResult read = verdandi::persistence::loadThemeFile(path);
+                verdandi::ui::ThemeImport imported{.theme = read.theme};
+                spdlog::info("Theme {} from {}", read.theme ? "imported" : "not imported", path.string());
+                for (const auto& problem : read.problems) {
+                    spdlog::warn("Theme file: {}", problem.description);
+                    imported.problems.push_back(problem.description);
+                }
+                return imported;
+            },
+        .exportTheme =
+            [](const std::filesystem::path& path, const verdandi::domain::Theme& theme) {
+                auto error = verdandi::persistence::saveThemeFile(path, theme);
+                if (error) {
+                    spdlog::error("Theme not exported to {}: {}", path.string(), *error);
+                } else {
+                    spdlog::info("Theme exported to {}", path.string());
+                }
+                return error;
+            },
+    });
     mainWindow.processesView()->setProcessTerminator(verdandi::platform::terminateOwnedProcess);
     if (const auto monitor = verdandi::platform::currentProcessIdentity()) {
         mainWindow.processesView()->setMonitorIdentity(*monitor);

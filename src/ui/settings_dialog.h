@@ -3,11 +3,13 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <filesystem>
 
 #include <QDialog>
 
 #include "domain/settings.h"
 #include "domain/theme.h"
+#include "ui/theme_files.h"
 
 class QCheckBox;
 class QComboBox;
@@ -28,11 +30,12 @@ class ColorButton;
  * and network throughput units, and a check box for each dashboard card. Its
  * Appearance tab shows the colour scheme, and a list of the theme's colours
  * with a ColorButton for each in the light and in the dark scheme, which
- * scrolls, and Reset Colours, which sets every colour to its default
- * (DC-151). OK accepts, Cancel and Escape reject, and Restore Defaults sets
- * every control to the defaults without closing the dialog. The dialog
- * changes nothing itself: whoever opened it reads settings() once it is
- * accepted.
+ * scrolls (DC-151). Below it, Import... shows the colours of a theme file,
+ * Export... writes the colours shown to one (DC-152), and Reset Colours sets
+ * every colour to its default. OK accepts, Cancel and Escape reject, and
+ * Restore Defaults sets every control to the defaults without closing the
+ * dialog. The dialog changes nothing itself: whoever opened it reads
+ * settings() once it is accepted, and Export... writes only the file chosen.
  *
  * The interval is chosen in steps of half a second
  * (domain::nearestRefreshInterval()): setSettings() shows a given interval as
@@ -56,6 +59,28 @@ public:
     /** Returns the settings that the controls show. */
     [[nodiscard]] domain::Settings settings() const;
 
+    /**
+     * Sets the functions that Import... and Export... read and write theme
+     * files with. Each one's button is disabled while its function is empty,
+     * as until this is called.
+     */
+    void setThemeFiles(ThemeFiles files);
+
+    /**
+     * Reads the theme file at path, as Import... does with the file that its
+     * dialog chose: the colour buttons show the colours read, and nothing
+     * else changes. When some colours in the file were not used, or none
+     * could be read, a window-modal message box says why.
+     */
+    void importTheme(const std::filesystem::path& path);
+
+    /**
+     * Writes the colours that the colour buttons show to the theme file at
+     * path, as Export... does with the file that its dialog chose. When it
+     * cannot, a window-modal message box says why.
+     */
+    void exportTheme(const std::filesystem::path& path);
+
     [[nodiscard]] QTabWidget* tabWidget() const;
     [[nodiscard]] QDoubleSpinBox* refreshIntervalSpinBox() const;
     [[nodiscard]] QComboBox* logLevelComboBox() const;
@@ -69,12 +94,17 @@ public:
     [[nodiscard]] QCheckBox* uptimePanelCheckBox() const;
     /** Returns the button that chooses role's colour in the dark scheme, or in the light one if darkScheme is false. */
     [[nodiscard]] ColorButton* colorButton(domain::ThemeColorRole role, bool darkScheme) const;
+    [[nodiscard]] QPushButton* importThemeButton() const;
+    [[nodiscard]] QPushButton* exportThemeButton() const;
     [[nodiscard]] QPushButton* resetColorsButton() const;
     [[nodiscard]] QDialogButtonBox* buttonBox() const;
 
 private:
-    // The group of the Appearance tab with the list of colours and Reset Colours.
+    // The group of the Appearance tab with the list of colours and its buttons.
     QGroupBox* createColorsGroup();
+    // Ask for a file in a file dialog, then import or export it.
+    void chooseThemeToImport();
+    void chooseThemeFileToExport();
     // Sets the colour buttons to show colors.
     void setTheme(const domain::Theme& colors);
     // The colours that the colour buttons show.
@@ -95,8 +125,11 @@ private:
     QCheckBox* m_uptimePanelCheckBox{nullptr};
     // The colour buttons of the light scheme, then of the dark one, each indexed by its role's value.
     std::array<std::array<ColorButton*, domain::kThemeColorRoleCount>, 2> m_colorButtons{};
+    QPushButton* m_importThemeButton{nullptr};
+    QPushButton* m_exportThemeButton{nullptr};
     QPushButton* m_resetColorsButton{nullptr};
     QDialogButtonBox* m_buttonBox{nullptr};
+    ThemeFiles m_themeFiles{};
 };
 
 } // namespace verdandi::ui

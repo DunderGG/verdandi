@@ -101,6 +101,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-149](#dc-149): A colour scheme setting, Windows' own, light or dark, asked of Qt with `QStyleHints::setColorScheme()`
   - [DC-150](#dc-150): The colours that widgets draw themselves are theme roles, each with a light and a dark shade, picked by the surface they are drawn on whenever they paint
   - [DC-151](#dc-151): Colours that the user chooses for each scheme: palette roles through the application palette, the others through `ui::theme` and a notifier
+  - [DC-152](#dc-152): Theme files are settings files that hold only the theme, read and written through functions that `main.cpp` gives the window
 - [Dashboard tab](#dashboard-tab)
   - [DC-45](#dc-45): Health evaluation: domain types, a pure evaluator in `monitoring`, and the result carried in the snapshot
   - [DC-46](#dc-46): Dashboard cards: `ResourceCard` widgets fed by pure formatting helpers
@@ -956,7 +957,7 @@ The rule and its reasons are in [coding_guidelines.md — Text colours](coding_g
 
 ## Colour schemes and themes
 
-The colour scheme that the monitor draws in, the colours that its widgets draw themselves, and the colours that the user chooses.
+The colour scheme that the monitor draws in, the colours that its widgets draw themselves, the colours that the user chooses, and the files that share them.
 
 <a id="dc-147"></a>
 ### DC-147: The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
@@ -1016,6 +1017,17 @@ The colour scheme that the monitor draws in, the colours that its widgets draw t
 **Consequences:** The monitor does not check a chosen colour's contrast, so text can become unreadable on a chosen page or card. The windows11 style still draws some parts, such as button fills and frames, in its own colours for the scheme.
 
 **History:** Dark mode and theme support, colours that the user chooses.
+
+---
+
+<a id="dc-152"></a>
+### DC-152: Theme files are settings files that hold only the theme, read and written through functions that `main.cpp` gives the window
+
+**Decision:** Export... in the settings dialog's Appearance tab writes the colours that the dialog shows to a file the user chooses, as a settings file that holds only the `version` and the `theme`. Import... reads the theme of such a file, or of any settings file, into the dialog, and OK applies it. Reading follows the settings file's rules: a colour that cannot be read, or a role that is not known, is left out and reported, the file's other settings are ignored, and a file with no theme gives none. A window-modal message box says what was not used, or why nothing was read or written. `persistence::loadThemeFile()` and `saveThemeFile()` do the work, through a `ui::ThemeFiles` that `main.cpp` gives the window, and the window each settings dialog.
+
+**Rationale:** A file in the settings file's format needs no reader of its own: its colours are read as the settings' are, and a backed-up `settings.json` can be imported as it is. A theme file holds no colour scheme, since which scheme to draw in is the user's choice rather than the theme's, and a theme made for the dark scheme still imports into a monitor that draws light. Importing into the dialog rather than applying at once lets the user look before OK, as with every other setting, and Export... writes what the dialog shows, so a theme can be tried and kept before it is applied. The functions are passed in, as ending a process is, because `ui` may not depend on `persistence` ([DC-20](#dc-20)); without them the buttons are disabled.
+
+**History:** Dark mode and theme support, exporting and importing theme settings.
 
 ---
 
@@ -1313,11 +1325,11 @@ The settings file and the settings dialog: what the file holds, how it is read a
 <a id="dc-124"></a>
 ### DC-124: Settings dialog: a window-modal `QDialog` from the File menu, which edits a copy and changes nothing until OK
 
-**Decision:** The main window's File menu has Settings... and Exit. Settings... opens a window-modal `SettingsDialog` on a copy of the window's settings, with OK, Cancel and Restore Defaults, which resets the controls without closing it. Its General tab holds the interval, the log level, the units and the dashboard's cards, and its Appearance tab the colour scheme and the chosen colours, in a list that scrolls ([DC-151](#dc-151)). Only OK changes anything: if the dialog's settings differ from the window's, the window keeps them, applies what its views show of them as `setSettings()` does, and emits `settingsChanged()`, for the receiver to save them and apply the rest. The refresh interval is a spin box in seconds, with a decimal point whatever the locale, as [DC-57](#dc-57)'s numbers are, in the half-second steps of [DC-123](#dc-123): a value typed between two steps moves to the nearer one when editing ends, and OK saves that step.
+**Decision:** The main window's File menu has Settings... and Exit. Settings... opens a window-modal `SettingsDialog` on a copy of the window's settings, with OK, Cancel and Restore Defaults, which resets the controls without closing it. Its General tab holds the interval, the log level, the units and the dashboard's cards, and its Appearance tab the colour scheme and the chosen colours, in a list that scrolls ([DC-151](#dc-151)), with Import... and Export... for theme files ([DC-152](#dc-152)). Only OK changes anything: if the dialog's settings differ from the window's, the window keeps them, applies what its views show of them as `setSettings()` does, and emits `settingsChanged()`, for the receiver to save them and apply the rest. The refresh interval is a spin box in seconds, with a decimal point whatever the locale, as [DC-57](#dc-57)'s numbers are, in the half-second steps of [DC-123](#dc-123): a value typed between two steps moves to the nearer one when editing ends, and OK saves that step.
 
 **Rationale:** OK and Cancel let the user try values and back out, as Windows' dialogs do; applying each control at once would save the file at every step of the spin box. Windows programs keep their settings in a menu bar, whose File menu will also hold the roadmap's "Run new task", as Task Manager's does. The window emits the settings rather than saving them, because `ui` may not depend on `persistence` ([DC-20](#dc-20)), and the scheduler and the logger are not the UI's to set; what the views show is, so the window applies it without a round trip through `app`. A spin box reaches all twenty intervals the file allows, where a list of presets such as Process Explorer's would leave out those between them. Moving a typed value to its step when editing ends shows the user what OK will save, rather than changing it silently. Emitting only on a change keeps an OK that changed nothing from saving the file.
 
-**History:** Phase 6, settings dialog; Phase 6, settings at startup (the window applies what its views show; the interval in half-second steps); Dark mode and theme support (the General and Appearance tabs).
+**History:** Phase 6, settings dialog; Phase 6, settings at startup (the window applies what its views show; the interval in half-second steps); Dark mode and theme support (the General and Appearance tabs, and theme files).
 
 ---
 

@@ -1,6 +1,9 @@
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
+#include <optional>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -19,6 +22,7 @@
 
 #include "domain/settings.h"
 #include "domain/system_snapshot.h"
+#include "domain/theme.h"
 #include "monitoring/sampling_scheduler.h"
 #include "support/appearance.h"
 #include "support/fake_collectors.h"
@@ -32,6 +36,7 @@
 #include "ui/processes_view.h"
 #include "ui/resource_card.h"
 #include "ui/settings_dialog.h"
+#include "ui/theme_files.h"
 
 using verdandi::domain::Settings;
 using verdandi::monitoring::SamplingScheduler;
@@ -241,6 +246,22 @@ TEST(MainWindow, SettingsDialogCancelled_KeepsTheSettingsAndEmitsNothing)
 
     EXPECT_EQ(mainWindow.settings(), Settings{});
     EXPECT_TRUE(emitted.empty());
+}
+
+TEST(MainWindow, SetThemeFiles_GivenToTheSettingsDialog)
+{
+    MainWindow mainWindow;
+    mainWindow.setThemeFiles(verdandi::ui::ThemeFiles{
+        .importTheme = [](const std::filesystem::path&) { return verdandi::ui::ThemeImport{}; },
+        .exportTheme = [](const std::filesystem::path&,
+                          const verdandi::domain::Theme&) { return std::optional<std::string>{}; },
+    });
+
+    const SettingsDialog* dialog = openSettingsDialog(mainWindow);
+
+    ASSERT_NE(dialog, nullptr);
+    EXPECT_TRUE(dialog->importThemeButton()->isEnabled());
+    EXPECT_TRUE(dialog->exportThemeButton()->isEnabled());
 }
 
 TEST(MainWindow, ShowSettingsNotSaved_WindowModalWarningWithThePathAndTheReasonAsPlainText)

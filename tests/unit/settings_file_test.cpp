@@ -23,7 +23,7 @@ namespace
 using Keys = std::vector<std::string>;
 
 // The keys of the problems found, sorted.
-Keys problemKeys(const SettingsReadResult& result)
+template <typename ReadResult> Keys problemKeys(const ReadResult& result)
 {
     Keys keys;
     for (const auto& problem : result.problems) {
@@ -31,6 +31,14 @@ Keys problemKeys(const SettingsReadResult& result)
     }
     std::ranges::sort(keys);
     return keys;
+}
+
+// A theme that chooses only the dark scheme's card colour, #202020.
+Theme themeWithCard()
+{
+    Theme theme;
+    theme.dark[ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
+    return theme;
 }
 
 // A settings file that names one value of an enumeration, and the settings it holds.
@@ -407,4 +415,88 @@ TEST(SettingsFile, ParseSettings_Utf8ByteOrderMark_Skipped)
 
     EXPECT_EQ(result.settings, Settings{.logLevel = LogLevel::Debug});
     EXPECT_TRUE(result.problems.empty());
+}
+
+// ---------------------------------------------------------------------------
+// serializeTheme and parseTheme
+// ---------------------------------------------------------------------------
+
+TEST(SettingsFile, SerializeTheme_ASettingsFileWithOnlyTheVersionAndTheTheme)
+{
+    Theme theme;
+    theme.light[ThemeColorRole::Page] = RgbColor{.red = 0xf0, .green = 0xf0, .blue = 0xf0};
+    const std::string expected = R"({
+    "version": 1,
+    "theme": {
+        "light": {
+            "page": "#f0f0f0"
+        },
+        "dark": {}
+    }
+}
+)";
+
+    EXPECT_EQ(serializeTheme(theme), expected);
+}
+
+TEST(SettingsFile, SerializeTheme_ReadAsAThemeAndAsSettings)
+{
+    const Theme theme = nonDefaultSettings().theme;
+    const std::string text = serializeTheme(theme);
+
+    const ThemeReadResult asTheme = parseTheme(text);
+    const SettingsReadResult asSettings = parseSettings(text);
+
+    EXPECT_EQ(asTheme.theme, theme);
+    EXPECT_TRUE(asTheme.problems.empty());
+    EXPECT_EQ(asSettings.settings, Settings{.theme = theme});
+    EXPECT_TRUE(asSettings.problems.empty());
+}
+
+TEST(SettingsFile, ParseTheme_SettingsFile_ItsThemeWithoutTheOtherSettingsProblems)
+{
+    const ThemeReadResult result = parseTheme(R"({
+        "refreshIntervalMs": "fast",
+        "fontSize": 12,
+        "theme": {"dark": {"card": "#202020"}}
+    })");
+
+    EXPECT_EQ(result.theme, themeWithCard());
+    EXPECT_TRUE(result.problems.empty());
+}
+
+TEST(SettingsFile, ParseTheme_ColoursNotUsed_TheOthersReadAndEachReported)
+{
+    const ThemeReadResult result = parseTheme(R"({
+        "version": 2,
+        "theme": {"dark": {"card": "#202020", "page": "black", "background": "#000000"}}
+    })");
+
+    EXPECT_EQ(result.theme, themeWithCard());
+    EXPECT_EQ(problemKeys(result), (Keys{"theme.dark.background", "theme.dark.page", "version"}));
+}
+
+TEST(SettingsFile, ParseTheme_NoThemeToRead_NoThemeAndOneProblem)
+{
+    struct Case
+    {
+        const char* name{};
+        const char* text{};
+    };
+    const std::array cases{
+        Case{"empty", ""},
+        Case{"not valid JSON", R"({"theme": {)"},
+        Case{"an array", R"([{"theme": {}}])"},
+        Case{"no theme", R"({"version": 1, "logLevel": "debug"})"},
+        Case{"theme not an object", R"({"theme": "dark"})"},
+    };
+
+    for (const auto& [name, text] : cases) {
+        SCOPED_TRACE(name);
+
+        const ThemeReadResult result = parseTheme(text);
+
+        EXPECT_FALSE(result.theme.has_value());
+        EXPECT_EQ(result.problems.size(), 1u);
+    }
 }

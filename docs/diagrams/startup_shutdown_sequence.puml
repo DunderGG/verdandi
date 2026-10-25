@@ -50,7 +50,7 @@ worker -> worker : enter COM's MTA,\nread the names at once,\nthen wait for a ch
 scheduler -> scheduler : set the change listeners\nof the two collectors
 runMonitor -> scheduler : setInterval(),\nsetSlowInterval()
 runMonitor -> runMonitor : SettingsService;\nPowerEventFilter, installed\nas a native event filter;\nThemeController, which applies\nthe settings' colour scheme,\nwhich the log names
-runMonitor -> window ** : construct, setSettings(),\nsetProcessTerminator()
+runMonitor -> window ** : construct, setSettings(),\nsetThemeFiles(),\nsetProcessTerminator()
 runMonitor -> runMonitor : connect snapshotReady to\nonSnapshotReady (Qt::Queued-\nConnection) and settingsChanged;\nInstanceServer listens
 runMonitor -> scheduler : start()
 scheduler -> slowThread ** : runSlowCollectors(stop_token)

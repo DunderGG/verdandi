@@ -1,5 +1,7 @@
 #include "ui/main_window.h"
 
+#include <utility>
+
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
@@ -159,6 +161,11 @@ const domain::Settings& MainWindow::settings() const
     return m_settings;
 }
 
+void MainWindow::setThemeFiles(ThemeFiles files)
+{
+    m_themeFiles = std::move(files);
+}
+
 void MainWindow::showSettingsNotSaved(const QString& path, const QString& reason)
 {
     openFileWarning(this, "Settings", "The settings could not be saved.", path, reason,
@@ -185,6 +192,7 @@ void MainWindow::openSettingsDialog()
 {
     auto* dialog = new SettingsDialog(m_settings, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setThemeFiles(m_themeFiles);
     connect(dialog, &QDialog::accepted, this, [this, dialog] {
         const domain::Settings edited = dialog->settings();
         if (edited != m_settings) {

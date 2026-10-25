@@ -1,5 +1,8 @@
 #include <array>
 #include <chrono>
+#include <filesystem>
+#include <optional>
+#include <string>
 
 #include <gtest/gtest.h>
 #include <QCheckBox>
@@ -8,6 +11,7 @@
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QLocale>
+#include <QMessageBox>
 #include <QPoint>
 #include <QPushButton>
 #include <QString>
@@ -19,12 +23,15 @@
 #include "ui/color_button.h"
 #include "ui/settings_dialog.h"
 #include "ui/theme/theme_colors.h"
+#include "ui/theme_files.h"
 
 using namespace verdandi::domain;
 using std::chrono::milliseconds;
 using verdandi::tests::nonDefaultSettings;
 using verdandi::ui::ColorButton;
 using verdandi::ui::SettingsDialog;
+using verdandi::ui::ThemeFiles;
+using verdandi::ui::ThemeImport;
 
 namespace
 {
@@ -253,4 +260,106 @@ TEST(SettingsDialog, OkAndCancel_AcceptAndReject)
         EXPECT_EQ(dialog.result(), expected);
         EXPECT_FALSE(dialog.isVisible());
     }
+}
+
+TEST(SettingsDialog, ThemeFileButtons_DisabledUntilTheirFunctionsAreSet)
+{
+    SettingsDialog dialog(Settings{});
+    ASSERT_FALSE(dialog.importThemeButton()->isEnabled());
+    ASSERT_FALSE(dialog.exportThemeButton()->isEnabled());
+
+    dialog.setThemeFiles(ThemeFiles{.importTheme = [](const std::filesystem::path&) { return ThemeImport{}; }});
+
+    EXPECT_TRUE(dialog.importThemeButton()->isEnabled());
+    EXPECT_FALSE(dialog.exportThemeButton()->isEnabled());
+}
+
+TEST(SettingsDialog, ImportTheme_ColoursRead_ShownAndNothingElseChanged)
+{
+    SettingsDialog dialog(Settings{.colorScheme = ColorScheme::Light});
+    std::filesystem::path read;
+    dialog.setThemeFiles(ThemeFiles{.importTheme = [&read](const std::filesystem::path& path) {
+        read = path;
+        return ThemeImport{.theme = nonDefaultSettings().theme};
+    }});
+
+    dialog.importTheme("C:\\Themes\\Ocean.json");
+
+    EXPECT_EQ(read, std::filesystem::path{"C:\\Themes\\Ocean.json"});
+    EXPECT_EQ(dialog.settings(), (Settings{.colorScheme = ColorScheme::Light, .theme = nonDefaultSettings().theme}));
+    EXPECT_EQ(dialog.findChild<QMessageBox*>(), nullptr);
+}
+
+TEST(SettingsDialog, ImportTheme_SomeColoursNotUsed_ShownAndAWarningSaysWhichAsPlainText)
+{
+    SettingsDialog dialog(Settings{});
+    dialog.setThemeFiles(ThemeFiles{.importTheme = [](const std::filesystem::path&) {
+        return ThemeImport{.theme = nonDefaultSettings().theme,
+                           .problems = {"theme.dark.page is \"<b>black</b>\", not a colour written as #rrggbb"}};
+    }});
+
+    dialog.importTheme("C:\\Themes\\Ocean.json");
+
+    EXPECT_EQ(dialog.settings().theme, nonDefaultSettings().theme);
+    const auto* box = dialog.findChild<QMessageBox*>();
+    ASSERT_NE(box, nullptr);
+    EXPECT_TRUE(box->isVisible());
+    EXPECT_EQ(box->windowModality(), Qt::WindowModal);
+    EXPECT_EQ(box->icon(), QMessageBox::Warning);
+    EXPECT_EQ(box->textFormat(), Qt::PlainText);
+    EXPECT_TRUE(box->informativeText().contains("C:\\Themes\\Ocean.json"));
+    EXPECT_TRUE(box->informativeText().contains("<b>black</b>"));
+}
+
+TEST(SettingsDialog, ImportTheme_NoColoursRead_KeptAndAWarningSaysWhy)
+{
+    SettingsDialog dialog(nonDefaultSettings());
+    dialog.setThemeFiles(ThemeFiles{.importTheme = [](const std::filesystem::path&) {
+        return ThemeImport{.problems = {"The file holds no theme; no colours read"}};
+    }});
+
+    dialog.importTheme("C:\\Themes\\settings.json");
+
+    EXPECT_EQ(dialog.settings(), nonDefaultSettings());
+    const auto* box = dialog.findChild<QMessageBox*>();
+    ASSERT_NE(box, nullptr);
+    EXPECT_TRUE(box->informativeText().contains("The file holds no theme"));
+}
+
+TEST(SettingsDialog, ExportTheme_WritesTheColoursShown)
+{
+    SettingsDialog dialog(Settings{});
+    dialog.colorButton(ThemeColorRole::Card, true)->setColor(QColor(0x20, 0x20, 0x20));
+    std::filesystem::path written;
+    Theme writtenTheme;
+    dialog.setThemeFiles(
+        ThemeFiles{.exportTheme = [&written, &writtenTheme](const std::filesystem::path& path, const Theme& theme) {
+            written = path;
+            writtenTheme = theme;
+            return std::optional<std::string>{};
+        }});
+
+    dialog.exportTheme("C:\\Themes\\Mine.json");
+
+    EXPECT_EQ(written, std::filesystem::path{"C:\\Themes\\Mine.json"});
+    EXPECT_EQ(writtenTheme, dialog.settings().theme);
+    EXPECT_TRUE(writtenTheme.dark[ThemeColorRole::Card].has_value());
+    EXPECT_EQ(dialog.findChild<QMessageBox*>(), nullptr);
+}
+
+TEST(SettingsDialog, ExportTheme_NotWritten_AWarningSaysWhy)
+{
+    SettingsDialog dialog(Settings{});
+    dialog.setThemeFiles(ThemeFiles{.exportTheme = [](const std::filesystem::path&, const Theme&) {
+        return std::optional<std::string>{"Cannot replace the file: Access is denied."};
+    }});
+
+    dialog.exportTheme("C:\\Themes\\Mine.json");
+
+    const auto* box = dialog.findChild<QMessageBox*>();
+    ASSERT_NE(box, nullptr);
+    EXPECT_TRUE(box->isVisible());
+    EXPECT_EQ(box->windowModality(), Qt::WindowModal);
+    EXPECT_TRUE(box->informativeText().contains("C:\\Themes\\Mine.json"));
+    EXPECT_TRUE(box->informativeText().contains("Access is denied."));
 }

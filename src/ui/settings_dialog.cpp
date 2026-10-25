@@ -5,15 +5,20 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
 #include <initializer_list>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QDoubleSpinBox>
+#include <QFileDialog>
 #include <QFont>
 #include <QFormLayout>
 #include <QFrame>
@@ -23,10 +28,13 @@
 #include <QLabel>
 #include <QLayoutItem>
 #include <QLocale>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QStandardPaths>
 #include <QString>
+#include <QStringList>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -120,6 +128,29 @@ static_assert(kColorRows.size() == domain::kThemeColorRoleCount, "the colour lis
 // The height of the colour list, which scrolls, in device-independent pixels:
 // about a dozen rows, so the dialog stays as tall as its General tab.
 constexpr int kColorListHeight = 320;
+
+// What the file dialogs of Import... and Export... offer: theme files, which
+// are JSON, as settings files are (DC-152).
+constexpr const char* kThemeFileFilter = "Themes (*.json);;All files (*)";
+const QString kDefaultThemeFileName = "Verdandi theme.json";
+
+// The folder that the file dialogs open in: the user's documents.
+QString themeFolder()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+}
+
+// Opens a window-modal warning over parent that says text, then details, such
+// as a file's path and why, all as plain text.
+void openWarning(QWidget* parent, const QString& title, const QString& text, const QString& details)
+{
+    auto* box = new QMessageBox(QMessageBox::Warning, title, text, QMessageBox::Ok, parent);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    // The path and the problems come from the file and the system; neither is rich text.
+    box->setTextFormat(Qt::PlainText);
+    box->setInformativeText(details);
+    box->open();
+}
 
 constexpr double kMillisecondsPerSecond = 1000.0;
 // One decimal shows every half-second step, which reaches each of Process
@@ -323,10 +354,20 @@ QGroupBox* SettingsDialog::createColorsGroup()
     // As wide as the list and the scroll bar beside it, so nothing is cut off.
     scrollArea->setMinimumWidth(list->sizeHint().width() + scrollArea->verticalScrollBar()->sizeHint().width());
 
+    m_importThemeButton = new QPushButton("&Import...", this);
+    m_importThemeButton->setToolTip("Show the colours of a theme file, or of a settings file");
+    m_importThemeButton->setEnabled(false);
+    connect(m_importThemeButton, &QPushButton::clicked, this, &SettingsDialog::chooseThemeToImport);
+    m_exportThemeButton = new QPushButton("E&xport...", this);
+    m_exportThemeButton->setToolTip("Write the colours shown here to a theme file, to share them or keep a copy");
+    m_exportThemeButton->setEnabled(false);
+    connect(m_exportThemeButton, &QPushButton::clicked, this, &SettingsDialog::chooseThemeFileToExport);
     m_resetColorsButton = new QPushButton("Reset C&olours", this);
     m_resetColorsButton->setToolTip("Every colour back to its default, in both schemes");
     connect(m_resetColorsButton, &QPushButton::clicked, this, [this] { setTheme(domain::Theme{}); });
     auto* buttonRow = new QHBoxLayout();
+    buttonRow->addWidget(m_importThemeButton);
+    buttonRow->addWidget(m_exportThemeButton);
     buttonRow->addStretch();
     buttonRow->addWidget(m_resetColorsButton);
 
@@ -353,6 +394,66 @@ void SettingsDialog::setSettings(const domain::Settings& settings)
     m_uptimePanelCheckBox->setChecked(settings.dashboardPanels.uptime);
 
     setTheme(settings.theme);
+}
+
+void SettingsDialog::setThemeFiles(ThemeFiles files)
+{
+    m_themeFiles = std::move(files);
+    m_importThemeButton->setEnabled(static_cast<bool>(m_themeFiles.importTheme));
+    m_exportThemeButton->setEnabled(static_cast<bool>(m_themeFiles.exportTheme));
+}
+
+void SettingsDialog::importTheme(const std::filesystem::path& path)
+{
+    if (!m_themeFiles.importTheme) {
+        return;
+    }
+    const ThemeImport imported = m_themeFiles.importTheme(path);
+    if (imported.theme) {
+        setTheme(*imported.theme);
+        if (imported.problems.empty()) {
+            return;
+        }
+    }
+
+    QStringList details{QDir::toNativeSeparators(QString::fromStdWString(path.wstring()))};
+    for (const std::string& problem : imported.problems) {
+        details.append(QString::fromStdString(problem));
+    }
+    openWarning(this, "Import Colours",
+                imported.theme ? "The colours were imported, but some in the file were not used."
+                               : "No colours were imported.",
+                details.join('\n'));
+}
+
+void SettingsDialog::exportTheme(const std::filesystem::path& path)
+{
+    if (!m_themeFiles.exportTheme) {
+        return;
+    }
+    if (const std::optional<std::string> error = m_themeFiles.exportTheme(path, shownTheme())) {
+        openWarning(this, "Export Colours", "The colours could not be exported.",
+                    QString("%1\n%2").arg(QDir::toNativeSeparators(QString::fromStdWString(path.wstring())),
+                                          QString::fromStdString(*error)));
+    }
+}
+
+void SettingsDialog::chooseThemeToImport()
+{
+    const QString path =
+        QFileDialog::getOpenFileName(this, "Import Colours", themeFolder(), QString::fromLatin1(kThemeFileFilter));
+    if (!path.isEmpty()) {
+        importTheme(std::filesystem::path{path.toStdWString()});
+    }
+}
+
+void SettingsDialog::chooseThemeFileToExport()
+{
+    const QString path = QFileDialog::getSaveFileName(
+        this, "Export Colours", themeFolder() + "/" + kDefaultThemeFileName, QString::fromLatin1(kThemeFileFilter));
+    if (!path.isEmpty()) {
+        exportTheme(std::filesystem::path{path.toStdWString()});
+    }
 }
 
 void SettingsDialog::setTheme(const domain::Theme& colors)
@@ -433,6 +534,16 @@ ColorButton* SettingsDialog::colorButton(domain::ThemeColorRole role, bool darkS
 QPushButton* SettingsDialog::resetColorsButton() const
 {
     return m_resetColorsButton;
+}
+
+QPushButton* SettingsDialog::importThemeButton() const
+{
+    return m_importThemeButton;
+}
+
+QPushButton* SettingsDialog::exportThemeButton() const
+{
+    return m_exportThemeButton;
 }
 
 QTabWidget* SettingsDialog::tabWidget() const

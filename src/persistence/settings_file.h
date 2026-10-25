@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "domain/settings.h"
+#include "domain/theme.h"
 
 namespace verdandi::persistence
 {
@@ -62,5 +63,43 @@ struct SettingsReadResult
  */
 [[nodiscard]] std::optional<std::string> saveSettingsFile(const std::filesystem::path& path,
                                                           const domain::Settings& settings);
+
+/**
+ * Colours read from a theme file, and the problems found in it. theme is
+ * std::nullopt when the file holds no theme to read, and then problems says
+ * why.
+ */
+struct ThemeReadResult
+{
+    std::optional<domain::Theme> theme{};
+    std::vector<SettingsProblem> problems{};
+};
+
+/**
+ * Returns the JSON text of a theme file that holds theme, ending with a
+ * newline (DC-152). A theme file is a settings file that holds only the
+ * version and the theme, so parseSettings() reads it as settings too.
+ */
+[[nodiscard]] std::string serializeTheme(const domain::Theme& theme);
+
+/**
+ * Reads the colours of a theme file, or of the theme of any settings file,
+ * from its JSON text, one colour at a time, as parseSettings() reads them: a
+ * colour that is not valid, or a role that is not known, is reported and
+ * left out. The file's other settings are neither read nor reported. Text
+ * that is not a JSON object, or holds no theme object, gives no theme and one
+ * problem.
+ */
+[[nodiscard]] ThemeReadResult parseTheme(std::string_view text);
+
+/** Reads the theme file at path. A file that cannot be opened gives no theme and one problem. */
+[[nodiscard]] ThemeReadResult loadThemeFile(const std::filesystem::path& path);
+
+/**
+ * Writes theme to a theme file at path, creating its directory, through a
+ * temporary file beside it as saveSettingsFile() does. Returns std::nullopt
+ * when the file was written, and otherwise why it was not.
+ */
+[[nodiscard]] std::optional<std::string> saveThemeFile(const std::filesystem::path& path, const domain::Theme& theme);
 
 } // namespace verdandi::persistence

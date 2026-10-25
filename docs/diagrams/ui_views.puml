@@ -6,6 +6,7 @@ title ui: the views and the presentation state they keep
 package "ui" $UI_COLOR {
     class MainWindow <<QMainWindow>> {
         setSettings(settings : Settings)
+        setThemeFiles(files : ThemeFiles)
         bringToFront()
         .. slot ..
         onSnapshotReady(snapshot : SystemSnapshot)
@@ -74,6 +75,11 @@ package "ui" $UI_COLOR {
         {field} function<ProcessTerminationResult(const ProcessInfo&)>
     }
 
+    struct ThemeFiles {
+        {field} importTheme : function<ThemeImport(path)>
+        {field} exportTheme : function<optional<string>(path, Theme)>
+    }
+
     package "charts (verdandi_ui_charts)" as charts {
         class SparklineWidget <<QWidget>> {
             setSeriesSamples(series, samples)
@@ -107,6 +113,7 @@ package "app" $APP_COLOR {
 SamplingScheduler ..> MainWindow : snapshotReady → onSnapshotReady,\nQt::QueuedConnection
 mainCpp ..> MainWindow : sets the settings, and connects\nsettingsChanged → SettingsService::change(),\nwhich applies and saves them
 mainCpp ..> ProcessesView : terminateOwnedProcess,\nthe monitor's identity
+mainCpp ..> ThemeFiles : loadThemeFile,\nsaveThemeFile
 mainCpp ..> ThemeController : creates before the window, gives it\nthe settings then and after settingsChanged,\nand logs the colour scheme
 MainWindow ..> SettingsDialog : opens on a copy\nof the settings
 
@@ -120,6 +127,8 @@ ProcessesView *-- ProcessModel
 ProcessesView *-- ProcessSortFilterProxyModel
 ProcessSortFilterProxyModel o-- ProcessModel : source
 ProcessesView o-- ProcessTerminator
+MainWindow o-- ThemeFiles
+SettingsDialog ..> ThemeFiles : Import..., Export...
 NetworkView *-- AdapterThroughputHistory
 AdapterThroughputHistory ..> SampleHistory
 DashboardView ..> SampleHistory

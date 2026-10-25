@@ -127,3 +127,40 @@ TEST(SettingsFileIntegration, SaveSettingsFile_DirectoryInPlaceOfTheFile_Returns
     EXPECT_TRUE(saveError.has_value());
     EXPECT_EQ(entryCount(directory.path()), 1);
 }
+
+TEST(SettingsFileIntegration, SaveThemeFileThenLoad_NewDirectory_ReadsTheColoursBack)
+{
+    const TemporaryDirectory directory;
+    const auto path = directory.path() / "Themes" / "Verdandi theme.json";
+
+    const auto saveError = saveThemeFile(path, nonDefaultSettings().theme);
+    const ThemeReadResult loaded = loadThemeFile(path);
+
+    EXPECT_FALSE(saveError.has_value()) << *saveError;
+    EXPECT_EQ(loaded.theme, nonDefaultSettings().theme);
+    EXPECT_TRUE(loaded.problems.empty());
+    // Written through a temporary file, which is gone.
+    EXPECT_EQ(entryCount(path.parent_path()), 1);
+}
+
+TEST(SettingsFileIntegration, LoadThemeFile_NoFile_NoThemeAndAProblem)
+{
+    const TemporaryDirectory directory;
+
+    const ThemeReadResult loaded = loadThemeFile(directory.path() / "missing.json");
+
+    EXPECT_FALSE(loaded.theme.has_value());
+    EXPECT_EQ(loaded.problems.size(), 1u);
+}
+
+TEST(SettingsFileIntegration, LoadThemeFile_SettingsFile_ItsColours)
+{
+    const TemporaryDirectory directory;
+    const auto path = directory.path() / "settings.json";
+    ASSERT_FALSE(saveSettingsFile(path, nonDefaultSettings()).has_value());
+
+    const ThemeReadResult loaded = loadThemeFile(path);
+
+    EXPECT_EQ(loaded.theme, nonDefaultSettings().theme);
+    EXPECT_TRUE(loaded.problems.empty());
+}

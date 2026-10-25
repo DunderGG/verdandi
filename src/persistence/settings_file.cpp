@@ -439,6 +439,53 @@ SettingsReadResult defaultsWithProblem(std::string description)
     return result;
 }
 
+// Returns the text of the file at path, or std::nullopt if it cannot be opened.
+std::optional<std::string> readText(const std::filesystem::path& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        return std::nullopt;
+    }
+    return std::string{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
+}
+
+// Writes text to the file at path, creating its directory, through a
+// temporary file beside it that then replaces the file. Returns std::nullopt
+// when the file was written, and otherwise why it was not.
+std::optional<std::string> writeThroughTemporaryFile(const std::filesystem::path& path, const std::string& text)
+{
+    std::error_code error;
+    if (path.has_parent_path()) {
+        std::filesystem::create_directories(path.parent_path(), error);
+        if (error) {
+            return std::format("Cannot create the file's directory: {}", error.message());
+        }
+    }
+
+    std::filesystem::path temporaryPath = path;
+    temporaryPath += kTemporaryFileSuffix;
+    std::ofstream file(temporaryPath, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        return std::string{"Cannot create the temporary file beside it"};
+    }
+    file << text;
+    file.close();
+    if (file.fail()) {
+        std::filesystem::remove(temporaryPath, error);
+        return std::string{"Cannot write the temporary file beside it"};
+    }
+
+    // MSVC's std::filesystem::rename() calls MoveFileExW with
+    // MOVEFILE_REPLACE_EXISTING, which replaces the file in one step.
+    std::filesystem::rename(temporaryPath, path, error);
+    if (error) {
+        std::string reason = error.message();
+        std::filesystem::remove(temporaryPath, error);
+        return std::format("Cannot replace the file: {}", reason);
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 std::string serializeSettings(const domain::Settings& settings)
@@ -500,51 +547,77 @@ SettingsReadResult parseSettings(std::string_view text)
 
 std::optional<SettingsReadResult> loadSettingsFile(const std::filesystem::path& path)
 {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
+    const std::optional<std::string> text = readText(path);
+    if (!text) {
         std::error_code error;
         if (!std::filesystem::exists(path, error) && !error) {
             return std::nullopt;
         }
         return defaultsWithProblem("The file cannot be opened; using the default settings");
     }
-
-    const std::string text{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
-    return parseSettings(text);
+    return parseSettings(*text);
 }
 
 std::optional<std::string> saveSettingsFile(const std::filesystem::path& path, const domain::Settings& settings)
 {
-    std::error_code error;
-    if (path.has_parent_path()) {
-        std::filesystem::create_directories(path.parent_path(), error);
-        if (error) {
-            return std::format("Cannot create the file's directory: {}", error.message());
-        }
+    return writeThroughTemporaryFile(path, serializeSettings(settings));
+}
+
+std::string serializeTheme(const domain::Theme& theme)
+{
+    ordered_json document = ordered_json::object();
+    document[kVersionKey] = kSettingsVersion;
+    document[kThemeKey] = themeDocument(theme);
+    return document.dump(4) + "\n";
+}
+
+ThemeReadResult parseTheme(std::string_view text)
+{
+    ThemeReadResult result;
+    const json document = json::parse(text, nullptr, false);
+    if (document.is_discarded()) {
+        report(result.problems, {}, std::format("Not valid JSON ({}); no colours read", syntaxError(text)));
+        return result;
+    }
+    if (!document.is_object()) {
+        report(result.problems, {}, std::format("Not a JSON object but {}; no colours read", describe(document)));
+        return result;
+    }
+    const auto theme = document.find(kThemeKey);
+    if (theme == document.end()) {
+        report(result.problems, {}, "The file holds no theme; no colours read");
+        return result;
+    }
+    if (!theme->is_object()) {
+        report(result.problems, kThemeKey,
+               std::format("{} is {}, not an object; no colours read", kThemeKey, describe(*theme)));
+        return result;
     }
 
-    std::filesystem::path temporaryPath = path;
-    temporaryPath += kTemporaryFileSuffix;
-    std::ofstream file(temporaryPath, std::ios::binary | std::ios::trunc);
-    if (!file) {
-        return std::string{"Cannot create the temporary file beside it"};
+    // The other settings of a settings file are not the theme's, so they
+    // are neither read nor reported.
+    if (const auto version = document.find(kVersionKey); version != document.end()) {
+        readVersion(*version, result.problems);
     }
-    file << serializeSettings(settings);
-    file.close();
-    if (file.fail()) {
-        std::filesystem::remove(temporaryPath, error);
-        return std::string{"Cannot write the temporary file beside it"};
-    }
+    result.theme.emplace();
+    readTheme(*theme, *result.theme, result.problems);
+    return result;
+}
 
-    // MSVC's std::filesystem::rename() calls MoveFileExW with
-    // MOVEFILE_REPLACE_EXISTING, which replaces the file in one step.
-    std::filesystem::rename(temporaryPath, path, error);
-    if (error) {
-        std::string reason = error.message();
-        std::filesystem::remove(temporaryPath, error);
-        return std::format("Cannot replace the file: {}", reason);
+ThemeReadResult loadThemeFile(const std::filesystem::path& path)
+{
+    const std::optional<std::string> text = readText(path);
+    if (!text) {
+        ThemeReadResult result;
+        report(result.problems, {}, "The file cannot be opened; no colours read");
+        return result;
     }
-    return std::nullopt;
+    return parseTheme(*text);
+}
+
+std::optional<std::string> saveThemeFile(const std::filesystem::path& path, const domain::Theme& theme)
+{
+    return writeThroughTemporaryFile(path, serializeTheme(theme));
 }
 
 } // namespace verdandi::persistence
