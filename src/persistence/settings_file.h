@@ -64,8 +64,11 @@ struct SettingsReadResult
 [[nodiscard]] std::optional<std::string> saveSettingsFile(const std::filesystem::path& path,
                                                           const domain::Settings& settings);
 
+/** The format version that serializeTheme() writes as a theme file's "version". */
+inline constexpr int kThemeFileVersion = 1;
+
 /**
- * Colours read from a theme file, and the problems found in it. theme is
+ * A theme read from a theme file, and the problems found in it. theme is
  * std::nullopt when the file holds no theme to read, and then problems says
  * why.
  */
@@ -77,18 +80,18 @@ struct ThemeReadResult
 
 /**
  * Returns the JSON text of a theme file that holds theme, ending with a
- * newline (DC-152). A theme file is a settings file that holds only the
- * version and the theme, so parseSettings() reads it as settings too.
+ * newline (DC-152): its version, its colour scheme, "light" or "dark", and
+ * its colours, each as "#rrggbb" under its role's name, as the settings file
+ * writes the user's colours.
  */
 [[nodiscard]] std::string serializeTheme(const domain::Theme& theme);
 
 /**
- * Reads the colours of a theme file, or of the theme of any settings file,
- * from its JSON text, one colour at a time, as parseSettings() reads them: a
- * colour that is not valid, or a role that is not known, is reported and
- * left out. The file's other settings are neither read nor reported. Text
- * that is not a JSON object, or holds no theme object, gives no theme and one
- * problem.
+ * Reads a theme from the JSON text of a theme file, one colour at a time, as
+ * parseSettings() reads the user's colours: a colour that is not valid, or a
+ * role that is not known, is reported and left out, and so is a key that is
+ * not part of a theme. Text that is not a JSON object, or that names no
+ * colour scheme, gives no theme and one problem.
  */
 [[nodiscard]] ThemeReadResult parseTheme(std::string_view text);
 
@@ -101,5 +104,23 @@ struct ThemeReadResult
  * when the file was written, and otherwise why it was not.
  */
 [[nodiscard]] std::optional<std::string> saveThemeFile(const std::filesystem::path& path, const domain::Theme& theme);
+
+/** The themes read from the themes folder, and the problems found in its files. */
+struct ThemeFolderReadResult
+{
+    std::vector<domain::NamedTheme> themes{};
+    std::vector<SettingsProblem> problems{};
+};
+
+/**
+ * Reads the themes folder at directory (DC-153). Each file in it whose name
+ * ends in ".json", in any case, is a theme named after the file without that
+ * extension, read as loadThemeFile() reads it. A file that holds no theme, or
+ * whose name is a built-in theme's (domain::isBuiltInThemeName()), is left
+ * out. Each problem's key and description begin with the file's name.
+ * Returns the themes ordered by name, whatever the case of its ASCII letters.
+ * A folder that does not exist gives no themes and no problem.
+ */
+[[nodiscard]] ThemeFolderReadResult loadThemeFolder(const std::filesystem::path& directory);
 
 } // namespace verdandi::persistence

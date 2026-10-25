@@ -110,14 +110,24 @@ package "domain" $DOMAIN_COLOR {
         refreshInterval : milliseconds
         displayUnits : DisplayUnits
         dashboardPanels : DashboardPanels
-        colorScheme : ColorScheme
-        theme : Theme
+        theme : string
+        themeColors : map<string, ThemeColors>
         logLevel : LogLevel
     }
 
+    struct NamedTheme {
+        name : string
+        theme : Theme
+    }
+
     struct Theme {
-        light : ThemeColors
-        dark : ThemeColors
+        scheme : ColorScheme
+        colors : ThemeColors
+    }
+
+    enum ColorScheme {
+        Light
+        Dark
     }
 
     struct ThemeColors {
@@ -161,8 +171,10 @@ SystemSnapshot *-- SystemActivitySample
 ConnectivityStatus *-- ConnectivityLevel
 SystemHealth *-- HealthLevel
 ProcessInfo ..> ProcessIdentity : identity()
-Settings *-- Theme
-Theme *-- "2" ThemeColors
+Settings *-- "*" ThemeColors : the user's,\nby theme
+NamedTheme *-- Theme
+Theme *-- ThemeColors
+Theme *-- ColorScheme
 ThemeColors ..> ThemeColorRole : indexed by
 
 legend bottom left
@@ -172,8 +184,10 @@ legend bottom left
     * **ProcessIdentity**: a process is its PID and creation time, never its PID alone,
       because Windows reuses PIDs.
     * **RingBuffer<T>** holds the fixed-capacity histories of the charts and sparklines.
-    * **Settings** are what the settings file holds, with the **Theme**'s colours that the user
-      chose for each colour scheme, and **ProcessTerminationResult** says what ending a process did.
+    * **Settings** are what the settings file holds: the theme they choose by name, and the colours
+      that the user chose in each theme. A **Theme** is a colour scheme and the colours it chooses;
+      a theme file of the themes folder holds one, a **NamedTheme** named after the file.
+      **ProcessTerminationResult** says what ending a process did.
 end legend
 
 @enduml

@@ -1,12 +1,14 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <optional>
 #include <string>
 #include <string_view>
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QCoreApplication>
 #include <QDir>
 #include <QStandardPaths>
 #include <QString>
@@ -28,7 +30,7 @@
 #include "ui/main_window.h"
 #include "ui/processes_view.h"
 #include "ui/theme_controller.h"
-#include "ui/theme_files.h"
+#include "ui/theme_sources.h"
 #include "verdandi_product_version.h"
 #include "verdandi_version.h"
 
@@ -48,14 +50,16 @@ QString logLevelNameList()
     return list;
 }
 
-// Says, for the log, where the scheme that the application draws in comes
-// from: Windows, or setting, the settings' colour scheme.
-std::string_view colorSchemeOrigin(Qt::ColorScheme scheme, verdandi::domain::ColorScheme setting)
+// Says, for the log, which theme the application draws with, and in which
+// colour scheme.
+std::string describeTheme(const verdandi::ui::ThemeController& controller)
 {
+    const Qt::ColorScheme scheme = controller.colorScheme();
     if (scheme == Qt::ColorScheme::Unknown) {
-        return "which Windows sets in place of any colour scheme";
+        return "a contrast theme, which Windows sets in place of any theme";
     }
-    return setting == verdandi::domain::ColorScheme::System ? "which Windows sets" : "which the settings choose";
+    return std::format("the {} theme, in {}{}", controller.themeName(), verdandi::ui::colorSchemeName(scheme),
+                       controller.themeName() == verdandi::domain::kFollowWindowsTheme ? ", which Windows sets" : "");
 }
 
 // Returns a path that Qt gives, with forward slashes, with the backslashes
@@ -84,14 +88,28 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
     verdandi::app::PowerEventFilter powerEventFilter(scheduler);
     application.installNativeEventFilter(&powerEventFilter);
 
+    // The themes of the folder beside verdandi.exe (DC-153), which the
+    // settings may choose.
+    const std::filesystem::path themesFolder = nativePath(QCoreApplication::applicationDirPath() + "/themes");
+    const verdandi::persistence::ThemeFolderReadResult themeFolder =
+        verdandi::persistence::loadThemeFolder(themesFolder);
+    for (const auto& problem : themeFolder.problems) {
+        spdlog::warn("Themes folder: {}", problem.description);
+    }
+    spdlog::info("{} themes read from {}", themeFolder.themes.size(), themesFolder.string());
+
     // Qt reads the colour scheme that Windows sets for applications when the
-    // QApplication starts, and follows it, unless the settings choose light
-    // or dark (DC-147, DC-149). Declared before the window, so that it
-    // outlives it, and set before the window is created.
+    // QApplication starts, and follows it, unless the settings choose a theme
+    // other than Follow Windows (DC-147, DC-149). Declared before the window,
+    // so that it outlives it, and set before the window is created.
     verdandi::ui::ThemeController themeController;
+    themeController.setThemes(themeFolder.themes);
     themeController.setSettings(settings);
-    spdlog::info("Drawing in {}, {}", verdandi::ui::colorSchemeName(themeController.colorScheme()),
-                 colorSchemeOrigin(themeController.colorScheme(), settings.colorScheme));
+    if (themeController.themeName() != settings.theme) {
+        spdlog::warn("The themes folder holds no theme {}, which the settings choose; following Windows",
+                     settings.theme);
+    }
+    spdlog::info("Drawing with {}", describeTheme(themeController));
     QObject::connect(&themeController, &verdandi::ui::ThemeController::colorSchemeChanged, &themeController,
                      [](Qt::ColorScheme scheme) {
                          spdlog::info("Drawing in {} from now on", verdandi::ui::colorSchemeName(scheme));
@@ -99,19 +117,34 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
 
     verdandi::ui::MainWindow mainWindow;
     mainWindow.setSettings(settings);
-    // The settings dialog imports and exports theme files through these,
-    // since ui may not depend on persistence (DC-152).
-    mainWindow.setThemeFiles(verdandi::ui::ThemeFiles{
-        .importTheme =
+    // The settings dialog lists the themes, and imports and exports theme
+    // files, through these, since ui may not depend on persistence (DC-152).
+    mainWindow.setThemeSources(verdandi::ui::ThemeSources{
+        .themes = [&themeController] { return themeController.themes(); },
+        .windowsColorScheme = [&themeController] { return themeController.windowsColorScheme(); },
+        .readTheme =
             [](const std::filesystem::path& path) {
                 const verdandi::persistence::ThemeReadResult read = verdandi::persistence::loadThemeFile(path);
                 verdandi::ui::ThemeImport imported{.theme = read.theme};
-                spdlog::info("Theme {} from {}", read.theme ? "imported" : "not imported", path.string());
+                spdlog::info("Theme {} from {}", read.theme ? "read" : "not read", path.string());
                 for (const auto& problem : read.problems) {
                     spdlog::warn("Theme file: {}", problem.description);
                     imported.problems.push_back(problem.description);
                 }
                 return imported;
+            },
+        .addTheme =
+            [&themeController, &themesFolder](const verdandi::domain::NamedTheme& theme) {
+                const std::filesystem::path path =
+                    themesFolder / QString::fromStdString(theme.name + ".json").toStdWString();
+                auto error = verdandi::persistence::saveThemeFile(path, theme.theme);
+                if (error) {
+                    spdlog::error("Theme {} not added to {}: {}", theme.name, path.string(), *error);
+                } else {
+                    spdlog::info("Theme {} added to {}", theme.name, path.string());
+                    themeController.addTheme(theme);
+                }
+                return error;
             },
         .exportTheme =
             [](const std::filesystem::path& path, const verdandi::domain::Theme& theme) {
@@ -135,7 +168,11 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
     // saves the file (DC-127), and the controller applies the colour scheme.
     QObject::connect(&mainWindow, &verdandi::ui::MainWindow::settingsChanged, &mainWindow,
                      [&settingsService, &themeController, &mainWindow](const verdandi::domain::Settings& changed) {
+                         const std::string previousTheme = themeController.themeName();
                          themeController.setSettings(changed);
+                         if (themeController.themeName() != previousTheme) {
+                             spdlog::info("Drawing with {} from now on", describeTheme(themeController));
+                         }
                          if (const auto error = settingsService.change(changed)) {
                              mainWindow.showSettingsNotSaved(QString::fromStdWString(settingsService.path().wstring()),
                                                              QString::fromStdString(*error));

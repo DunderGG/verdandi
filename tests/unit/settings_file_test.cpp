@@ -3,6 +3,7 @@
 #include <chrono>
 #include <format>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -33,11 +34,11 @@ template <typename ReadResult> Keys problemKeys(const ReadResult& result)
     return keys;
 }
 
-// A theme that chooses only the dark scheme's card colour, #202020.
+// A theme of the dark scheme that chooses only its card colour, #202020.
 Theme themeWithCard()
 {
-    Theme theme;
-    theme.dark[ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
+    Theme theme{.scheme = ColorScheme::Dark};
+    theme.colors[ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
     return theme;
 }
 
@@ -62,9 +63,10 @@ std::vector<NamedValueCase> namedValueCases()
          Settings{.displayUnits = {.networkRates = NetworkRateUnits::BytesPerSecond}}},
         {"network rates in bits", R"({"displayUnits": {"networkRates": "bitsPerSecond"}})",
          Settings{.displayUnits = {.networkRates = NetworkRateUnits::BitsPerSecond}}},
-        {"Windows' colour scheme", R"({"colorScheme": "system"})", Settings{.colorScheme = ColorScheme::System}},
-        {"light colour scheme", R"({"colorScheme": "light"})", Settings{.colorScheme = ColorScheme::Light}},
-        {"dark colour scheme", R"({"colorScheme": "dark"})", Settings{.colorScheme = ColorScheme::Dark}},
+        {"the Follow Windows theme", R"({"theme": "Follow Windows"})", Settings{.theme = "Follow Windows"}},
+        {"the Light theme", R"({"theme": "Light"})", Settings{.theme = "Light"}},
+        {"the Dark theme", R"({"theme": "Dark"})", Settings{.theme = "Dark"}},
+        {"a theme of the themes folder", R"({"theme": "Verdandi"})", Settings{.theme = "Verdandi"}},
         {"a log level", R"({"logLevel": "critical"})", Settings{.logLevel = LogLevel::Critical}},
     };
 }
@@ -92,11 +94,8 @@ TEST(SettingsFile, SerializeSettings_Defaults_WritesTheFileFormat)
         "network": true,
         "uptime": true
     },
-    "colorScheme": "system",
-    "theme": {
-        "light": {},
-        "dark": {}
-    },
+    "theme": "Follow Windows",
+    "themeColors": {},
     "logLevel": "info"
 }
 )";
@@ -104,17 +103,19 @@ TEST(SettingsFile, SerializeSettings_Defaults_WritesTheFileFormat)
     EXPECT_EQ(serializeSettings(Settings{}), expected);
 }
 
-TEST(SettingsFile, SerializeSettings_ChosenColours_WrittenInLowercaseUnderTheirRolesInRoleOrder)
+TEST(SettingsFile, SerializeSettings_ChosenColours_UnderTheirThemesInLowercaseInRoleOrder)
 {
     Settings settings;
-    settings.theme.light[ThemeColorRole::Page] = RgbColor{.red = 0xf0, .green = 0xf0, .blue = 0xf0};
-    settings.theme.dark[ThemeColorRole::AccessDenied] = RgbColor{.red = 0xab, .green = 0xcd, .blue = 0xef};
-    settings.theme.dark[ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
-    const std::string expected = R"(    "theme": {
-        "light": {
+    settings.themeColors["Light"][ThemeColorRole::Page] = RgbColor{.red = 0xf0, .green = 0xf0, .blue = 0xf0};
+    settings.themeColors["Verdandi"][ThemeColorRole::AccessDenied] = RgbColor{.red = 0xab, .green = 0xcd, .blue = 0xef};
+    settings.themeColors["Verdandi"][ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
+    // A theme whose colours the user left alone is left out.
+    settings.themeColors["Dark"] = ThemeColors{};
+    const std::string expected = R"(    "themeColors": {
+        "Light": {
             "page": "#f0f0f0"
         },
-        "dark": {
+        "Verdandi": {
             "card": "#202020",
             "accessDenied": "#abcdef"
         }
@@ -190,24 +191,29 @@ TEST(SettingsFile, ParseSettings_ThemeColorRoleNames_ReadAsTheirRoles)
     for (const auto& [name, role] : cases) {
         SCOPED_TRACE(name);
         Settings expected;
-        expected.theme.dark[role] = RgbColor{.red = 0x01, .green = 0x02, .blue = 0x03};
+        expected.themeColors["Dark"][role] = RgbColor{.red = 0x01, .green = 0x02, .blue = 0x03};
 
         const SettingsReadResult result =
-            parseSettings(std::format(R"({{"theme": {{"dark": {{"{}": "#010203"}}}}}})", name));
+            parseSettings(std::format(R"({{"themeColors": {{"Dark": {{"{}": "#010203"}}}}}})", name));
+        const ThemeReadResult theme =
+            parseTheme(std::format(R"({{"scheme": "dark", "colors": {{"{}": "#010203"}}}})", name));
 
         EXPECT_EQ(result.settings, expected);
         EXPECT_TRUE(result.problems.empty());
+        EXPECT_EQ(theme.theme, (Theme{.scheme = ColorScheme::Dark, .colors = expected.themeColors["Dark"]}));
+        EXPECT_TRUE(theme.problems.empty());
     }
 }
 
-TEST(SettingsFile, ParseSettings_ThemeColours_EitherCaseInEitherScheme)
+TEST(SettingsFile, ParseSettings_ThemeColours_EitherCaseInAnyTheme)
 {
     Settings expected;
-    expected.theme.light[ThemeColorRole::ChartLine1] = RgbColor{.red = 0xab, .green = 0xcd, .blue = 0xef};
-    expected.theme.dark[ThemeColorRole::Text] = RgbColor{.red = 0xab, .green = 0xcd, .blue = 0xef};
+    expected.themeColors["Light"][ThemeColorRole::ChartLine1] = RgbColor{.red = 0xab, .green = 0xcd, .blue = 0xef};
+    expected.themeColors["Verdandi"][ThemeColorRole::Text] = RgbColor{.red = 0xab, .green = 0xcd, .blue = 0xef};
 
-    const SettingsReadResult result =
-        parseSettings(R"({"theme": {"light": {"chartLine1": "#abcdef"}, "dark": {"text": "#ABcDeF"}}})");
+    // A theme whose colours the user left alone has no entry.
+    const SettingsReadResult result = parseSettings(
+        R"({"themeColors": {"Light": {"chartLine1": "#abcdef"}, "Verdandi": {"text": "#ABcDeF"}, "Dark": {}}})");
 
     EXPECT_EQ(result.settings, expected);
     EXPECT_TRUE(result.problems.empty());
@@ -282,19 +288,20 @@ TEST(SettingsFile, ParseSettings_InvalidValue_KeepsItsDefaultAndIsReported)
         {"panels as a list", R"({"dashboardPanels": ["cpu"]})", "dashboardPanels"},
         {"panel as a number", R"({"dashboardPanels": {"cpu": 0}})", "dashboardPanels.cpu"},
         {"panel as text", R"({"dashboardPanels": {"cpu": "false"}})", "dashboardPanels.cpu"},
-        {"unknown colour scheme", R"({"colorScheme": "auto"})", "colorScheme"},
-        {"colour scheme in another case", R"({"colorScheme": "Dark"})", "colorScheme"},
-        {"colour scheme as a boolean", R"({"colorScheme": true})", "colorScheme"},
-        {"theme not an object", R"({"theme": "dark"})", "theme"},
-        {"scheme's colours not an object", R"({"theme": {"dark": ["#000000"]}})", "theme.dark"},
-        {"colour as a number", R"({"theme": {"dark": {"card": 2105376}}})", "theme.dark.card"},
-        {"colour by name", R"({"theme": {"dark": {"card": "red"}}})", "theme.dark.card"},
-        {"colour without #", R"({"theme": {"dark": {"card": "202020"}}})", "theme.dark.card"},
-        {"colour of three digits", R"({"theme": {"dark": {"card": "#222"}}})", "theme.dark.card"},
-        {"colour with opacity", R"({"theme": {"dark": {"card": "#20202080"}}})", "theme.dark.card"},
-        {"colour with a non-hexadecimal digit", R"({"theme": {"dark": {"card": "#20202g"}}})", "theme.dark.card"},
-        {"colour with a sign", R"({"theme": {"dark": {"card": "#+20202"}}})", "theme.dark.card"},
-        {"colour null", R"({"theme": {"light": {"page": null}}})", "theme.light.page"},
+        {"theme as an object", R"({"theme": {"name": "Dark"}})", "theme"},
+        {"theme as a boolean", R"({"theme": true})", "theme"},
+        {"theme without a name", R"({"theme": ""})", "theme"},
+        {"themes' colours not an object", R"({"themeColors": "Dark"})", "themeColors"},
+        {"theme's colours not an object", R"({"themeColors": {"Dark": ["#000000"]}})", "themeColors.Dark"},
+        {"colour as a number", R"({"themeColors": {"Dark": {"card": 2105376}}})", "themeColors.Dark.card"},
+        {"colour by name", R"({"themeColors": {"Dark": {"card": "red"}}})", "themeColors.Dark.card"},
+        {"colour without #", R"({"themeColors": {"Dark": {"card": "202020"}}})", "themeColors.Dark.card"},
+        {"colour of three digits", R"({"themeColors": {"Dark": {"card": "#222"}}})", "themeColors.Dark.card"},
+        {"colour with opacity", R"({"themeColors": {"Dark": {"card": "#20202080"}}})", "themeColors.Dark.card"},
+        {"colour with a non-hexadecimal digit", R"({"themeColors": {"Dark": {"card": "#20202g"}}})",
+         "themeColors.Dark.card"},
+        {"colour with a sign", R"({"themeColors": {"Dark": {"card": "#+20202"}}})", "themeColors.Dark.card"},
+        {"colour null", R"({"themeColors": {"Light": {"page": null}}})", "themeColors.Light.page"},
         {"unknown log level", R"({"logLevel": "verbose"})", "logLevel"},
         {"log level in another case", R"({"logLevel": "Debug"})", "logLevel"},
         {"log level as a number", R"({"logLevel": 1})", "logLevel"},
@@ -334,12 +341,12 @@ TEST(SettingsFile, ParseSettings_UnknownKeys_IgnoredAndReported)
         "fontSize": 12,
         "displayUnits": {"temperature": "celsius"},
         "dashboardPanels": {"gpu": true},
-        "theme": {"contrast": {}, "light": {"background": "#000000"}}
+        "themeColors": {"Light": {"background": "#000000"}}
     })");
 
     EXPECT_EQ(result.settings, Settings{.refreshInterval = milliseconds{2000}});
-    EXPECT_EQ(problemKeys(result), (Keys{"dashboardPanels.gpu", "displayUnits.temperature", "fontSize",
-                                         "theme.contrast", "theme.light.background"}));
+    EXPECT_EQ(problemKeys(result),
+              (Keys{"dashboardPanels.gpu", "displayUnits.temperature", "fontSize", "themeColors.Light.background"}));
 }
 
 TEST(SettingsFile, ParseSettings_VersionOtherThanOne_ReportedAndTheSettingsRead)
@@ -421,17 +428,16 @@ TEST(SettingsFile, ParseSettings_Utf8ByteOrderMark_Skipped)
 // serializeTheme and parseTheme
 // ---------------------------------------------------------------------------
 
-TEST(SettingsFile, SerializeTheme_ASettingsFileWithOnlyTheVersionAndTheTheme)
+TEST(SettingsFile, SerializeTheme_TheVersionTheSchemeAndTheColours)
 {
-    Theme theme;
-    theme.light[ThemeColorRole::Page] = RgbColor{.red = 0xf0, .green = 0xf0, .blue = 0xf0};
+    Theme theme = themeWithCard();
+    theme.colors[ThemeColorRole::Accent] = RgbColor{.red = 0xf4, .green = 0xb7, .blue = 0x40};
     const std::string expected = R"({
     "version": 1,
-    "theme": {
-        "light": {
-            "page": "#f0f0f0"
-        },
-        "dark": {}
+    "scheme": "dark",
+    "colors": {
+        "card": "#202020",
+        "accent": "#f4b740"
     }
 }
 )";
@@ -439,41 +445,31 @@ TEST(SettingsFile, SerializeTheme_ASettingsFileWithOnlyTheVersionAndTheTheme)
     EXPECT_EQ(serializeTheme(theme), expected);
 }
 
-TEST(SettingsFile, SerializeTheme_ReadAsAThemeAndAsSettings)
+TEST(SettingsFile, SerializeThenParseTheme_EachScheme_ReadsBackWithoutProblems)
 {
-    const Theme theme = nonDefaultSettings().theme;
-    const std::string text = serializeTheme(theme);
+    for (const ColorScheme scheme : {ColorScheme::Light, ColorScheme::Dark}) {
+        SCOPED_TRACE(scheme == ColorScheme::Dark ? "dark" : "light");
+        Theme theme = themeWithCard();
+        theme.scheme = scheme;
 
-    const ThemeReadResult asTheme = parseTheme(text);
-    const SettingsReadResult asSettings = parseSettings(text);
+        const ThemeReadResult result = parseTheme(serializeTheme(theme));
 
-    EXPECT_EQ(asTheme.theme, theme);
-    EXPECT_TRUE(asTheme.problems.empty());
-    EXPECT_EQ(asSettings.settings, Settings{.theme = theme});
-    EXPECT_TRUE(asSettings.problems.empty());
+        EXPECT_EQ(result.theme, theme);
+        EXPECT_TRUE(result.problems.empty());
+    }
 }
 
-TEST(SettingsFile, ParseTheme_SettingsFile_ItsThemeWithoutTheOtherSettingsProblems)
-{
-    const ThemeReadResult result = parseTheme(R"({
-        "refreshIntervalMs": "fast",
-        "fontSize": 12,
-        "theme": {"dark": {"card": "#202020"}}
-    })");
-
-    EXPECT_EQ(result.theme, themeWithCard());
-    EXPECT_TRUE(result.problems.empty());
-}
-
-TEST(SettingsFile, ParseTheme_ColoursNotUsed_TheOthersReadAndEachReported)
+TEST(SettingsFile, ParseTheme_ValuesNotUsed_TheOthersReadAndEachReported)
 {
     const ThemeReadResult result = parseTheme(R"({
         "version": 2,
-        "theme": {"dark": {"card": "#202020", "page": "black", "background": "#000000"}}
+        "scheme": "dark",
+        "colors": {"card": "#202020", "page": "black", "background": "#000000"},
+        "author": "me"
     })");
 
     EXPECT_EQ(result.theme, themeWithCard());
-    EXPECT_EQ(problemKeys(result), (Keys{"theme.dark.background", "theme.dark.page", "version"}));
+    EXPECT_EQ(problemKeys(result), (Keys{"author", "colors.background", "colors.page", "version"}));
 }
 
 TEST(SettingsFile, ParseTheme_NoThemeToRead_NoThemeAndOneProblem)
@@ -485,10 +481,12 @@ TEST(SettingsFile, ParseTheme_NoThemeToRead_NoThemeAndOneProblem)
     };
     const std::array cases{
         Case{"empty", ""},
-        Case{"not valid JSON", R"({"theme": {)"},
-        Case{"an array", R"([{"theme": {}}])"},
-        Case{"no theme", R"({"version": 1, "logLevel": "debug"})"},
-        Case{"theme not an object", R"({"theme": "dark"})"},
+        Case{"not valid JSON", R"({"scheme": {)"},
+        Case{"an array", R"([{"scheme": "dark"}])"},
+        Case{"no scheme", R"({"version": 1, "colors": {"card": "#202020"}})"},
+        Case{"unknown scheme", R"({"scheme": "dusk", "colors": {}})"},
+        Case{"scheme in another case", R"({"scheme": "Dark", "colors": {}})"},
+        Case{"a settings file", R"({"version": 1, "theme": "Dark"})"},
     };
 
     for (const auto& [name, text] : cases) {
@@ -497,6 +495,7 @@ TEST(SettingsFile, ParseTheme_NoThemeToRead_NoThemeAndOneProblem)
         const ThemeReadResult result = parseTheme(text);
 
         EXPECT_FALSE(result.theme.has_value());
-        EXPECT_EQ(result.problems.size(), 1u);
+        // The settings file's theme is not part of a theme file.
+        EXPECT_EQ(result.problems.size(), std::string_view{name} == "a settings file" ? 2u : 1u);
     }
 }

@@ -260,8 +260,8 @@ TEST(SparklineWidget, LineAndGridColoursChosen_TakenFromTheTheme)
     parent.setPalette(palette);
     auto* widget = new SparklineWidget(&parent);
     verdandi::domain::Theme theme;
-    theme.light[ThemeColorRole::ChartLine1] = verdandi::domain::RgbColor{.red = 0x12, .green = 0x34, .blue = 0x56};
-    theme.light[ThemeColorRole::ChartGrid] = verdandi::domain::RgbColor{.red = 0x65, .green = 0x43, .blue = 0x21};
+    theme.colors[ThemeColorRole::ChartLine1] = verdandi::domain::RgbColor{.red = 0x12, .green = 0x34, .blue = 0x56};
+    theme.colors[ThemeColorRole::ChartGrid] = verdandi::domain::RgbColor{.red = 0x65, .green = 0x43, .blue = 0x21};
 
     const verdandi::tests::ScopedCustomColors chosen(theme);
 

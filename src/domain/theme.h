@@ -1,9 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <string_view>
 
 namespace verdandi::domain
 {
@@ -11,9 +14,9 @@ namespace verdandi::domain
 /**
  * A colour of the monitor's theme, named by what it colours. The first five
  * are the palette's surfaces, text and accent, which Windows' palette gives
- * unless the user chooses them (DC-151). The others the widgets draw
- * themselves, and each has a shade for a light surface and one for a dark
- * surface (DC-150).
+ * unless a theme or the user chooses them (DC-151). The others the widgets
+ * draw themselves, and each has a shade for a light surface and one for a
+ * dark surface (DC-150).
  */
 enum class ThemeColorRole
 {
@@ -70,7 +73,7 @@ struct RgbColor
     bool operator==(const RgbColor&) const = default;
 };
 
-/** The colours that the user chose for one colour scheme. A role without one keeps its own. */
+/** The colours that a theme, or the user, chooses. A role without one keeps the colour scheme's own. */
 struct ThemeColors
 {
     std::array<std::optional<RgbColor>, kThemeColorRoleCount> colors{};
@@ -85,26 +88,88 @@ struct ThemeColors
         return colors[static_cast<std::size_t>(role)];
     }
 
+    /** Returns whether no role has a colour. */
+    [[nodiscard]] bool empty() const
+    {
+        return std::ranges::none_of(colors, [](const std::optional<RgbColor>& color) { return color.has_value(); });
+    }
+
+    /** Returns these colours, with each colour that changes chooses in place of this one's. */
+    [[nodiscard]] ThemeColors withChanges(const ThemeColors& changes) const
+    {
+        ThemeColors changed = *this;
+        for (std::size_t role = 0; role < kThemeColorRoleCount; ++role) {
+            if (changes.colors[role]) {
+                changed.colors[role] = changes.colors[role];
+            }
+        }
+        return changed;
+    }
+
     bool operator==(const ThemeColors&) const = default;
 };
 
 /**
- * The colours that the user chose for the light and the dark colour scheme
- * (DC-151). Default-constructed, it chooses none, and the monitor draws in
- * its own colours.
+ * The colour scheme that a theme draws in: Windows' light or dark palette,
+ * and the light or dark shades of the colours that the widgets draw.
+ */
+enum class ColorScheme
+{
+    Light,
+    Dark,
+};
+
+/**
+ * A theme (DC-153): the colour scheme that it draws in, and the colours that
+ * it chooses there. A role that it leaves out keeps the scheme's own colour:
+ * Windows' for the palette's roles, and the monitor's built-in shade for the
+ * others. Default-constructed, it is the Light theme.
  */
 struct Theme
 {
-    ThemeColors light{};
-    ThemeColors dark{};
-
-    /** Returns the colours chosen for the dark scheme if darkScheme is true, and for the light one otherwise. */
-    [[nodiscard]] const ThemeColors& colors(bool darkScheme) const
-    {
-        return darkScheme ? dark : light;
-    }
+    ColorScheme scheme{ColorScheme::Light};
+    ThemeColors colors{};
 
     bool operator==(const Theme&) const = default;
 };
+
+/** A theme of the themes folder, named after its file (DC-153). */
+struct NamedTheme
+{
+    std::string name{};
+    Theme theme{};
+
+    bool operator==(const NamedTheme&) const = default;
+};
+
+/**
+ * The names of the themes built into the monitor, which the settings choose
+ * as they choose a theme of the themes folder: the one of Light and Dark
+ * that Windows sets for apps, which the monitor follows, and Light and Dark,
+ * which draw in Windows' palette for their scheme. No theme file can take
+ * one (isBuiltInThemeName()).
+ */
+inline constexpr std::string_view kFollowWindowsTheme = "Follow Windows";
+inline constexpr std::string_view kLightTheme = "Light";
+inline constexpr std::string_view kDarkTheme = "Dark";
+
+/** Returns whether name is a built-in theme's name, whatever the case of its ASCII letters. */
+[[nodiscard]] constexpr bool isBuiltInThemeName(std::string_view name)
+{
+    const auto lower = [](char letter) {
+        return letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter - 'A' + 'a') : letter;
+    };
+    const auto equalIgnoringCase = [&lower](std::string_view first, std::string_view second) {
+        return std::ranges::equal(first, second, [&lower](char a, char b) { return lower(a) == lower(b); });
+    };
+    return equalIgnoringCase(name, kFollowWindowsTheme) || equalIgnoringCase(name, kLightTheme) ||
+           equalIgnoringCase(name, kDarkTheme);
+}
+
+/** Returns the built-in theme for scheme: Light or Dark, with no colours of their own. */
+[[nodiscard]] constexpr std::string_view builtInThemeName(ColorScheme scheme)
+{
+    return scheme == ColorScheme::Dark ? kDarkTheme : kLightTheme;
+}
 
 } // namespace verdandi::domain

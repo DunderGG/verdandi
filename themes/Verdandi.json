@@ -1,0 +1,20 @@
+{
+    "version": 1,
+    "scheme": "dark",
+    "colors": {
+        "window": "#0f1426",
+        "page": "#131a2f",
+        "card": "#1b2340",
+        "text": "#f2f4fa",
+        "accent": "#f4b740",
+        "chartLine1": "#f4b740",
+        "chartLine2": "#7b93f5",
+        "chartLine3": "#2ec4a9",
+        "chartLine4": "#b48cf2",
+        "chartLine5": "#f07aa8",
+        "chartGrid": "#a9b3d1",
+        "good": "#4cc38a",
+        "warning": "#ff8f4d",
+        "critical": "#ff6b6b"
+    }
+}

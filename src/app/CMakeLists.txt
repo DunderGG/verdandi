@@ -171,6 +171,16 @@ target_include_directories(verdandi PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generat
 # VCPKG_APPLOCAL_DEPS copies the linked Qt DLLs; the plugins are copied here.
 verdandi_deploy_qt_plugins(verdandi)
 
+# The themes that ship with the monitor go in the themes folder beside
+# verdandi.exe, where it reads them (DC-153).
+file(GLOB verdandiThemeFiles CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/themes/*.json")
+add_custom_command(TARGET verdandi POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:verdandi>/themes"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${verdandiThemeFiles} "$<TARGET_FILE_DIR:verdandi>/themes"
+    COMMENT "Copying the themes beside verdandi"
+    VERBATIM
+)
+
 # In Release, the Microsoft C++ runtime that verdandi.exe and the Qt DLLs
 # import goes beside them, so that a copy of the directory runs without the
 # Visual C++ Redistributable (DC-137). Debug builds import the debug runtime,
@@ -224,10 +234,10 @@ add_custom_target(verdandi_notices ALL
 
 # What the portable zip holds, which cpack --preset release writes (DC-143):
 # verdandi.exe, the DLLs beside it, which THIRD_PARTY_NOTICES.txt accounts
-# for, the Qt plugins, the license and the notices, and nothing else of the
-# directory where it is built, and the default settings. The program database
-# goes in a zip of its own. Debug builds import the debug runtime, which may
-# not be redistributed, so they have no install rules.
+# for, the Qt plugins, the license and the notices, the themes, and nothing
+# else of the directory where it is built, and the default settings. The
+# program database goes in a zip of its own. Debug builds import the debug
+# runtime, which may not be redistributed, so they have no install rules.
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     # The settings.json beside verdandi.exe in the zip, which makes the copy
     # portable (DC-131), holds the code's defaults, which a tool writes. Beside
@@ -269,5 +279,6 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt" "${CMAKE_CURRENT_BINARY_DIR}/THIRD_PARTY_NOTICES.txt"
         DESTINATION . COMPONENT application
     )
+    install(FILES ${verdandiThemeFiles} DESTINATION themes COMPONENT application)
     install(FILES "$<TARGET_PDB_FILE:verdandi>" DESTINATION . COMPONENT symbols)
 endif()

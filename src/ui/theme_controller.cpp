@@ -1,6 +1,8 @@
 #include "ui/theme_controller.h"
 
+#include <algorithm>
 #include <initializer_list>
+#include <utility>
 
 #include <QApplication>
 #include <QGuiApplication>
@@ -74,9 +76,14 @@ ThemeController::ThemeController(QObject* parent) : QObject(parent)
     // the application the new scheme's palette, which Qt resolves against the
     // style and the palette that applyColorScheme() leaves.
     connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme scheme) {
+        if (!m_requestedScheme) {
+            noteWindowsColorScheme(scheme);
+        }
         applyColorScheme(scheme);
         emit colorSchemeChanged(scheme);
     });
+    // Before any settings ask Qt for a scheme, Qt reports Windows' own.
+    noteWindowsColorScheme(colorScheme());
     applyColorScheme(colorScheme());
 }
 
@@ -84,7 +91,7 @@ ThemeController::~ThemeController()
 {
     // Gives back Windows' scheme without following it, and without saying so.
     disconnect(QGuiApplication::styleHints(), nullptr, this, nullptr);
-    if (m_colorSchemeSetting != domain::ColorScheme::System) {
+    if (m_requestedScheme) {
         QGuiApplication::styleHints()->unsetColorScheme();
     }
     // A palette with no roles set gives back the Windows theme's palettes,
@@ -99,31 +106,97 @@ Qt::ColorScheme ThemeController::colorScheme() const
     return QGuiApplication::styleHints()->colorScheme();
 }
 
+domain::ColorScheme ThemeController::windowsColorScheme() const
+{
+    return m_windowsColorScheme;
+}
+
+void ThemeController::setThemes(std::vector<domain::NamedTheme> themes)
+{
+    m_themes = std::move(themes);
+    std::ranges::sort(m_themes, [](const domain::NamedTheme& first, const domain::NamedTheme& second) {
+        return QString::fromStdString(first.name).compare(QString::fromStdString(second.name), Qt::CaseInsensitive) < 0;
+    });
+    applyTheme();
+}
+
+void ThemeController::addTheme(const domain::NamedTheme& theme)
+{
+    std::vector<domain::NamedTheme> themes = m_themes;
+    std::erase_if(themes, [&theme](const domain::NamedTheme& existing) { return existing.name == theme.name; });
+    themes.push_back(theme);
+    setThemes(std::move(themes));
+}
+
+const std::vector<domain::NamedTheme>& ThemeController::themes() const
+{
+    return m_themes;
+}
+
+const std::string& ThemeController::themeName() const
+{
+    return m_themeName;
+}
+
 void ThemeController::setSettings(const domain::Settings& settings)
 {
-    const bool colorsChanged = settings.theme != m_theme;
-    m_theme = settings.theme;
+    m_chosenTheme = settings.theme;
+    m_userColors = settings.themeColors;
+    applyTheme();
+}
+
+void ThemeController::applyTheme()
+{
+    const auto userColors = [this](std::string_view theme) {
+        const auto colors = m_userColors.find(theme);
+        return colors != m_userColors.end() ? colors->second : domain::ThemeColors{};
+    };
+    // Follow Windows and the built-in themes draw with the user's colours in
+    // Light and Dark, since Windows can change between them.
+    std::string themeName{domain::kFollowWindowsTheme};
+    std::optional<domain::ColorScheme> scheme;
+    domain::ThemeColors lightColors = userColors(domain::kLightTheme);
+    domain::ThemeColors darkColors = userColors(domain::kDarkTheme);
+    if (m_chosenTheme == domain::kLightTheme || m_chosenTheme == domain::kDarkTheme) {
+        themeName = m_chosenTheme;
+        scheme = m_chosenTheme == domain::kDarkTheme ? domain::ColorScheme::Dark : domain::ColorScheme::Light;
+    } else if (const auto theme = std::ranges::find(m_themes, m_chosenTheme, &domain::NamedTheme::name);
+               theme != m_themes.end()) {
+        themeName = theme->name;
+        scheme = theme->theme.scheme;
+        const domain::ThemeColors colors = theme->theme.colors.withChanges(userColors(theme->name));
+        lightColors = *scheme == domain::ColorScheme::Light ? colors : domain::ThemeColors{};
+        darkColors = *scheme == domain::ColorScheme::Dark ? colors : domain::ThemeColors{};
+    }
+
+    m_themeName = std::move(themeName);
+    const bool colorsChanged = lightColors != m_lightColors || darkColors != m_darkColors;
+    m_lightColors = lightColors;
+    m_darkColors = darkColors;
 
     const Qt::ColorScheme drawn = colorScheme();
-    if (settings.colorScheme != m_colorSchemeSetting) {
-        m_colorSchemeSetting = settings.colorScheme;
+    if (scheme != m_requestedScheme) {
+        m_requestedScheme = scheme;
         // Qt emits colorSchemeChanged() at once if the scheme it draws in changes.
-        switch (settings.colorScheme) {
-            case domain::ColorScheme::Light:
-                QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Light);
-                break;
-            case domain::ColorScheme::Dark:
-                QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
-                break;
-            case domain::ColorScheme::System:
-            default:
-                QGuiApplication::styleHints()->unsetColorScheme();
-                break;
+        if (!scheme) {
+            QGuiApplication::styleHints()->unsetColorScheme();
+            noteWindowsColorScheme(colorScheme());
+        } else {
+            QGuiApplication::styleHints()->setColorScheme(
+                *scheme == domain::ColorScheme::Dark ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
         }
     }
     // A change of scheme has applied the colours already.
     if (colorsChanged && colorScheme() == drawn) {
         applyColors();
+    }
+}
+
+void ThemeController::noteWindowsColorScheme(Qt::ColorScheme scheme)
+{
+    // A contrast theme hides which scheme Windows sets for apps.
+    if (scheme != Qt::ColorScheme::Unknown) {
+        m_windowsColorScheme = scheme == Qt::ColorScheme::Dark ? domain::ColorScheme::Dark : domain::ColorScheme::Light;
     }
 }
 
@@ -166,14 +239,19 @@ void ThemeController::applyColors()
         palette.setColor(QPalette::Window, own.color(QPalette::Window));
         palette.setColor(QPalette::Base, own.color(QPalette::Base));
     }
+    const bool isDark = colorScheme() == Qt::ColorScheme::Dark;
+    const domain::ThemeColors& colors = isDark ? m_darkColors : m_lightColors;
     // A contrast theme's colours are the user's too, and replace any others.
     if (!isContrastTheme) {
-        setChosenColors(palette, m_theme.colors(colorScheme() == Qt::ColorScheme::Dark));
+        setChosenColors(palette, colors);
     }
     QApplication::setPalette(palette);
-    // After the palette, so that the widgets that take the user's colours
+    // After the palette, so that the widgets that take the chosen colours
     // again pick them by the new palette.
-    theme::setCustomColors(isContrastTheme ? domain::Theme{} : m_theme);
+    theme::setCustomColors(
+        isContrastTheme ? domain::Theme{}
+                        : domain::Theme{.scheme = isDark ? domain::ColorScheme::Dark : domain::ColorScheme::Light,
+                                        .colors = colors});
 }
 
 std::string_view colorSchemeName(Qt::ColorScheme scheme)

@@ -23,13 +23,17 @@ namespace verdandi::ui::theme
  */
 [[nodiscard]] std::optional<QColor> defaultColor(domain::ThemeColorRole role, bool darkSurface);
 
-/** Returns the colour that the user chose for role in the dark or the light scheme, if any (setCustomColors()). */
+/**
+ * Returns the colour that the theme in use, or the user, chose for role, if
+ * any (setCustomColors()), when darkScheme says the scheme that the theme
+ * draws in, and std::nullopt for the other scheme.
+ */
 [[nodiscard]] std::optional<QColor> customColor(domain::ThemeColorRole role, bool darkScheme);
 
 /**
- * Returns the colour of role on a dark or a light surface: the user's colour
- * for that scheme, with the built-in colour's opacity, or the built-in colour.
- * role must have a built-in colour (defaultColor()).
+ * Returns the colour of role on a dark or a light surface: the chosen colour
+ * (customColor()), with the built-in colour's opacity, or the built-in
+ * colour. role must have a built-in colour (defaultColor()).
  */
 [[nodiscard]] QColor color(domain::ThemeColorRole role, bool darkSurface);
 
@@ -37,17 +41,18 @@ namespace verdandi::ui::theme
  * Returns the colour of role on background, by whether background is dark.
  * A widget calls it when it paints, or whenever its palette changes or
  * ThemeNotifier::colorsChanged() is emitted, with the colour it is drawn on,
- * so its colours follow a change of scheme and of the user's colours.
+ * so its colours follow a change of scheme and of the chosen colours.
  */
 [[nodiscard]] QColor color(domain::ThemeColorRole role, const QColor& background);
 
-/** Returns the colours that the user chose, which customColor() and color() give. None until set. */
+/** Returns the chosen colours, which customColor() and color() give. The Light theme's, none, until set. */
 [[nodiscard]] const domain::Theme& customColors();
 
 /**
- * Makes theme the colours that the user chose, for the whole application
- * (DC-151), and emits ThemeNotifier::colorsChanged() if they differ from the
- * previous ones. ui::ThemeController sets them. Use only on the UI thread.
+ * Makes theme's colours, in its scheme, the chosen colours for the whole
+ * application (DC-151): the colours of the theme in use, with the user's in
+ * place of its own. Emits ThemeNotifier::colorsChanged() if they differ from
+ * the previous ones. ui::ThemeController sets them. Use only on the UI thread.
  */
 void setCustomColors(const domain::Theme& theme);
 
@@ -59,7 +64,7 @@ void setCustomColors(const domain::Theme& theme);
 
 /**
  * Tells the widgets that keep a colour of the theme, or need painting again,
- * that the user's colours have changed (DC-151). One notifier serves the
+ * that the chosen colours have changed (DC-151). One notifier serves the
  * application, which owns it, as it owns QStyleHints.
  *
  * Not thread-safe; use only on the UI thread.
@@ -73,7 +78,7 @@ public:
     [[nodiscard]] static ThemeNotifier* instance();
 
 signals:
-    /** Emitted after setCustomColors() changes the user's colours. */
+    /** Emitted after setCustomColors() changes the chosen colours. */
     void colorsChanged();
 
 private:

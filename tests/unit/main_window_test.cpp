@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <QAction>
+#include <QComboBox>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QImage>
@@ -36,7 +37,7 @@
 #include "ui/processes_view.h"
 #include "ui/resource_card.h"
 #include "ui/settings_dialog.h"
-#include "ui/theme_files.h"
+#include "ui/theme_sources.h"
 
 using verdandi::domain::Settings;
 using verdandi::monitoring::SamplingScheduler;
@@ -248,11 +249,13 @@ TEST(MainWindow, SettingsDialogCancelled_KeepsTheSettingsAndEmitsNothing)
     EXPECT_TRUE(emitted.empty());
 }
 
-TEST(MainWindow, SetThemeFiles_GivenToTheSettingsDialog)
+TEST(MainWindow, SetThemeSources_GivenToTheSettingsDialog)
 {
     MainWindow mainWindow;
-    mainWindow.setThemeFiles(verdandi::ui::ThemeFiles{
-        .importTheme = [](const std::filesystem::path&) { return verdandi::ui::ThemeImport{}; },
+    mainWindow.setThemeSources(verdandi::ui::ThemeSources{
+        .themes = [] { return std::vector{verdandi::domain::NamedTheme{.name = "Verdandi"}}; },
+        .readTheme = [](const std::filesystem::path&) { return verdandi::ui::ThemeImport{}; },
+        .addTheme = [](const verdandi::domain::NamedTheme&) { return std::optional<std::string>{}; },
         .exportTheme = [](const std::filesystem::path&,
                           const verdandi::domain::Theme&) { return std::optional<std::string>{}; },
     });
@@ -260,6 +263,7 @@ TEST(MainWindow, SetThemeFiles_GivenToTheSettingsDialog)
     const SettingsDialog* dialog = openSettingsDialog(mainWindow);
 
     ASSERT_NE(dialog, nullptr);
+    EXPECT_GE(dialog->themeComboBox()->findData(QString("Verdandi")), 0);
     EXPECT_TRUE(dialog->importThemeButton()->isEnabled());
     EXPECT_TRUE(dialog->exportThemeButton()->isEnabled());
 }

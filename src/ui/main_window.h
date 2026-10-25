@@ -5,7 +5,7 @@
 
 #include "domain/settings.h"
 #include "domain/system_snapshot.h"
-#include "ui/theme_files.h"
+#include "ui/theme_sources.h"
 
 class QAction;
 class QTabWidget;
@@ -58,11 +58,13 @@ public:
     [[nodiscard]] const domain::Settings& settings() const;
 
     /**
-     * Sets the functions that the Settings dialog's Import... and Export...
-     * read and write theme files with (DC-152); a dialog opened before keeps
-     * those it had. Their buttons are disabled until set.
+     * Sets where the Settings dialog finds the themes and Windows' scheme,
+     * and the functions that its Import... and Export... read and write theme
+     * files with (DC-152, DC-153); a dialog opened before keeps those it had.
+     * Until set, it offers the built-in themes only, and its Import... and
+     * Export... are disabled.
      */
-    void setThemeFiles(ThemeFiles files);
+    void setThemeSources(ThemeSources sources);
 
     /**
      * Says in a window-modal message box that the settings could not be saved
@@ -106,7 +108,7 @@ private:
     QAction* m_exitAction{nullptr};
     QAction* m_aboutAction{nullptr};
     domain::Settings m_settings{};
-    ThemeFiles m_themeFiles{};
+    ThemeSources m_themeSources{};
 };
 
 } // namespace verdandi::ui

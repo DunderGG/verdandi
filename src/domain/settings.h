@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <functional>
+#include <map>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #include "theme.h"
@@ -53,19 +56,6 @@ struct DashboardPanels
     bool uptime{true};
 
     bool operator==(const DashboardPanels&) const = default;
-};
-
-/**
- * The colour scheme the monitor draws in (DC-149). A Windows contrast theme
- * replaces any of them.
- * System — the one Windows sets for applications, and each one it changes to.
- * Light, Dark — that scheme, whatever Windows sets.
- */
-enum class ColorScheme
-{
-    System,
-    Light,
-    Dark,
 };
 
 /** The least severe level of message that the log keeps. Off keeps none. */
@@ -142,14 +132,21 @@ static_assert(kMinRefreshInterval % kRefreshIntervalStep == std::chrono::millise
  * refreshInterval — how often the fast collectors are sampled and a snapshot
  *                   is emitted: a multiple of kRefreshIntervalStep from
  *                   kMinRefreshInterval to kMaxRefreshInterval.
+ * theme           — the theme that the monitor draws with, by name
+ *                   (DC-149): kFollowWindowsTheme, kLightTheme, kDarkTheme,
+ *                   or a theme of the themes folder (DC-153).
+ * themeColors     — the colours that the user chose in each theme, by the
+ *                   theme's name, in place of the theme's own (DC-151).
+ *                   Follow Windows draws with those of Light or Dark. A
+ *                   theme whose colours the user left alone has no entry.
  */
 struct Settings
 {
     std::chrono::milliseconds refreshInterval{kDefaultRefreshInterval};
     DisplayUnits displayUnits{};
     DashboardPanels dashboardPanels{};
-    ColorScheme colorScheme{ColorScheme::System};
-    Theme theme{};
+    std::string theme{kFollowWindowsTheme};
+    std::map<std::string, ThemeColors, std::less<>> themeColors{};
     LogLevel logLevel{LogLevel::Info};
 
     bool operator==(const Settings&) const = default;

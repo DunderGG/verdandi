@@ -9,10 +9,13 @@
 #include <cstdint>
 #include <format>
 #include <fstream>
+#include <functional>
 #include <ios>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <optional>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -33,11 +36,16 @@ constexpr std::string_view kDisplayUnitsKey = "displayUnits";
 constexpr std::string_view kBytesKey = "bytes";
 constexpr std::string_view kNetworkRatesKey = "networkRates";
 constexpr std::string_view kDashboardPanelsKey = "dashboardPanels";
-constexpr std::string_view kColorSchemeKey = "colorScheme";
 constexpr std::string_view kThemeKey = "theme";
-constexpr std::string_view kLightColorsKey = "light";
-constexpr std::string_view kDarkColorsKey = "dark";
+constexpr std::string_view kThemeColorsKey = "themeColors";
 constexpr std::string_view kLogLevelKey = "logLevel";
+
+// A theme file's keys, beside its version (DC-152).
+constexpr std::string_view kSchemeKey = "scheme";
+constexpr std::string_view kColorsKey = "colors";
+
+// The extension of the theme files in the themes folder, in any case (DC-153).
+constexpr std::string_view kThemeFileExtension = ".json";
 
 // Appended to the settings file's name for the file that a save writes first.
 constexpr std::string_view kTemporaryFileSuffix = ".tmp";
@@ -60,12 +68,11 @@ constexpr std::array kNetworkRateUnitsNames{
 };
 
 constexpr std::array kColorSchemeNames{
-    NamedValue<domain::ColorScheme>{"system", domain::ColorScheme::System},
     NamedValue<domain::ColorScheme>{"light", domain::ColorScheme::Light},
     NamedValue<domain::ColorScheme>{"dark", domain::ColorScheme::Dark},
 };
 
-// A theme colour's key in the colours of a scheme, which name the role.
+// A theme colour's key in a theme's colours, which names the role.
 constexpr std::array kThemeColorRoleNames{
     NamedValue<domain::ThemeColorRole>{"window", domain::ThemeColorRole::Window},
     NamedValue<domain::ThemeColorRole>{"page", domain::ThemeColorRole::Page},
@@ -188,14 +195,16 @@ void readMembers(const json& value, std::string_view key, std::vector<SettingsPr
     }
 }
 
-void readVersion(const json& value, std::vector<SettingsProblem>& problems)
+// Reports a version other than written, the one that this monitor writes, as
+// a file whose contents, such as "settings", it still reads.
+void readVersion(const json& value, int written, std::string_view contents, std::vector<SettingsProblem>& problems)
 {
-    if (value.is_number_integer() && value == kSettingsVersion) {
+    if (value.is_number_integer() && value == written) {
         return;
     }
     report(problems, kVersionKey,
-           std::format("{} is {}, but this monitor writes {}; reading the settings it knows", kVersionKey,
-                       describe(value), kSettingsVersion));
+           std::format("{} is {}, but this monitor writes {}; reading the {} it knows", kVersionKey, describe(value),
+                       written, contents));
 }
 
 void readRefreshInterval(const json& value, std::chrono::milliseconds& interval, std::vector<SettingsProblem>& problems)
@@ -293,15 +302,20 @@ ordered_json themeColorsDocument(const domain::ThemeColors& colors)
     return document;
 }
 
-ordered_json themeDocument(const domain::Theme& theme)
+// The colours that the user chose in each theme, under the theme's name. A
+// theme whose colours the user left alone is left out.
+ordered_json themeColorsByThemeDocument(const std::map<std::string, domain::ThemeColors, std::less<>>& themeColors)
 {
     ordered_json document = ordered_json::object();
-    document[kLightColorsKey] = themeColorsDocument(theme.light);
-    document[kDarkColorsKey] = themeColorsDocument(theme.dark);
+    for (const auto& [theme, colors] : themeColors) {
+        if (!colors.empty()) {
+            document[theme] = themeColorsDocument(colors);
+        }
+    }
     return document;
 }
 
-// Reads the colours chosen for one scheme, at key, such as "theme.dark".
+// Reads a theme's colours at key, such as "colors" or "themeColors.Dark".
 void readThemeColors(const json& value, std::string_view key, domain::ThemeColors& colors,
                      std::vector<SettingsProblem>& problems)
 {
@@ -310,7 +324,7 @@ void readThemeColors(const json& value, std::string_view key, domain::ThemeColor
                     const auto entry = std::ranges::find(kThemeColorRoleNames, std::string_view{roleKey},
                                                          &NamedValue<domain::ThemeColorRole>::name);
                     if (entry == kThemeColorRoleNames.end()) {
-                        reportUnknownKey(problems, path);
+                        report(problems, path, std::format("{} is not a theme colour; ignoring it", path));
                         return;
                     }
                     const std::optional<domain::RgbColor> color =
@@ -325,18 +339,56 @@ void readThemeColors(const json& value, std::string_view key, domain::ThemeColor
                 });
 }
 
-void readTheme(const json& value, domain::Theme& theme, std::vector<SettingsProblem>& problems)
+// Reads the name of the theme that the settings choose, which may be any
+// theme's, since the themes folder is read apart from the settings.
+void readThemeName(const json& value, std::string& theme, std::vector<SettingsProblem>& problems)
 {
-    readMembers(value, kThemeKey, problems,
-                [&theme, &problems](const std::string& path, const std::string& key, const json& member) {
-                    if (key == kLightColorsKey) {
-                        readThemeColors(member, path, theme.light, problems);
-                    } else if (key == kDarkColorsKey) {
-                        readThemeColors(member, path, theme.dark, problems);
-                    } else {
-                        reportUnknownKey(problems, path);
+    if (value.is_string() && !value.get_ref<const std::string&>().empty()) {
+        theme = value.get<std::string>();
+        return;
+    }
+    report(problems, kThemeKey,
+           std::format("{} is {}, not the name of a theme; using {}", kThemeKey, describe(value), theme));
+}
+
+void readThemeColorsByTheme(const json& value, std::map<std::string, domain::ThemeColors, std::less<>>& themeColors,
+                            std::vector<SettingsProblem>& problems)
+{
+    readMembers(value, kThemeColorsKey, problems,
+                [&themeColors, &problems](const std::string& path, const std::string& theme, const json& member) {
+                    domain::ThemeColors colors;
+                    readThemeColors(member, path, colors, problems);
+                    if (!colors.empty()) {
+                        themeColors[theme] = colors;
                     }
                 });
+}
+
+// The names of a theme file's values for the problems found in them, such as
+// "colors.accent", begin with the file's name in the themes folder.
+void prefixProblems(std::vector<SettingsProblem>& problems, const std::string& fileName)
+{
+    for (SettingsProblem& problem : problems) {
+        problem.key = problem.key.empty() ? fileName : std::format("{}: {}", fileName, problem.key);
+        problem.description = std::format("{}: {}", fileName, problem.description);
+    }
+}
+
+// Returns text, which is UTF-8, as the standard library's narrow strings hold it.
+std::string fromUtf8(const std::u8string& text)
+{
+    return std::string(text.begin(), text.end());
+}
+
+// Returns text with its ASCII letters in lower case, to order names whatever
+// the case of those letters.
+std::string lowerAscii(std::string_view text)
+{
+    std::string lower(text);
+    std::ranges::transform(lower, lower.begin(), [](char letter) {
+        return letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter - 'A' + 'a') : letter;
+    });
+    return lower;
 }
 
 // A SAX handler that accepts every value and keeps the parser's message for
@@ -504,8 +556,8 @@ std::string serializeSettings(const domain::Settings& settings)
     document[kRefreshIntervalKey] = settings.refreshInterval.count();
     document[kDisplayUnitsKey] = std::move(displayUnits);
     document[kDashboardPanelsKey] = std::move(dashboardPanels);
-    document[kColorSchemeKey] = nameOf(settings.colorScheme, kColorSchemeNames);
-    document[kThemeKey] = themeDocument(settings.theme);
+    document[kThemeKey] = settings.theme;
+    document[kThemeColorsKey] = themeColorsByThemeDocument(settings.themeColors);
     document[kLogLevelKey] = nameOf(settings.logLevel, kLogLevelNames);
     return document.dump(4) + "\n";
 }
@@ -525,17 +577,17 @@ SettingsReadResult parseSettings(std::string_view text)
     domain::Settings& settings = result.settings;
     for (const auto& [key, value] : document.items()) {
         if (key == kVersionKey) {
-            readVersion(value, result.problems);
+            readVersion(value, kSettingsVersion, "settings", result.problems);
         } else if (key == kRefreshIntervalKey) {
             readRefreshInterval(value, settings.refreshInterval, result.problems);
         } else if (key == kDisplayUnitsKey) {
             readDisplayUnits(value, settings.displayUnits, result.problems);
         } else if (key == kDashboardPanelsKey) {
             readDashboardPanels(value, settings.dashboardPanels, result.problems);
-        } else if (key == kColorSchemeKey) {
-            readName(value, kColorSchemeKey, kColorSchemeNames, settings.colorScheme, result.problems);
         } else if (key == kThemeKey) {
-            readTheme(value, settings.theme, result.problems);
+            readThemeName(value, settings.theme, result.problems);
+        } else if (key == kThemeColorsKey) {
+            readThemeColorsByTheme(value, settings.themeColors, result.problems);
         } else if (key == kLogLevelKey) {
             readName(value, kLogLevelKey, kLogLevelNames, settings.logLevel, result.problems);
         } else {
@@ -566,8 +618,9 @@ std::optional<std::string> saveSettingsFile(const std::filesystem::path& path, c
 std::string serializeTheme(const domain::Theme& theme)
 {
     ordered_json document = ordered_json::object();
-    document[kVersionKey] = kSettingsVersion;
-    document[kThemeKey] = themeDocument(theme);
+    document[kVersionKey] = kThemeFileVersion;
+    document[kSchemeKey] = nameOf(theme.scheme, kColorSchemeNames);
+    document[kColorsKey] = themeColorsDocument(theme.colors);
     return document.dump(4) + "\n";
 }
 
@@ -576,31 +629,50 @@ ThemeReadResult parseTheme(std::string_view text)
     ThemeReadResult result;
     const json document = json::parse(text, nullptr, false);
     if (document.is_discarded()) {
-        report(result.problems, {}, std::format("Not valid JSON ({}); no colours read", syntaxError(text)));
+        report(result.problems, {}, std::format("Not valid JSON ({}); no theme read", syntaxError(text)));
         return result;
     }
     if (!document.is_object()) {
-        report(result.problems, {}, std::format("Not a JSON object but {}; no colours read", describe(document)));
-        return result;
-    }
-    const auto theme = document.find(kThemeKey);
-    if (theme == document.end()) {
-        report(result.problems, {}, "The file holds no theme; no colours read");
-        return result;
-    }
-    if (!theme->is_object()) {
-        report(result.problems, kThemeKey,
-               std::format("{} is {}, not an object; no colours read", kThemeKey, describe(*theme)));
+        report(result.problems, {}, std::format("Not a JSON object but {}; no theme read", describe(document)));
         return result;
     }
 
-    // The other settings of a settings file are not the theme's, so they
-    // are neither read nor reported.
-    if (const auto version = document.find(kVersionKey); version != document.end()) {
-        readVersion(*version, result.problems);
+    std::optional<domain::ColorScheme> scheme;
+    bool schemeReported = false;
+    domain::ThemeColors colors;
+    for (const auto& [key, value] : document.items()) {
+        if (key == kVersionKey) {
+            readVersion(value, kThemeFileVersion, "colours", result.problems);
+        } else if (key == kSchemeKey) {
+            const auto entry =
+                value.is_string()
+                    ? std::ranges::find(kColorSchemeNames, std::string_view{value.get_ref<const std::string&>()},
+                                        &NamedValue<domain::ColorScheme>::name)
+                    : kColorSchemeNames.end();
+            if (entry != kColorSchemeNames.end()) {
+                scheme = entry->value;
+            } else {
+                report(result.problems, kSchemeKey,
+                       std::format("{} is {}, not one of {}; no theme read", kSchemeKey, describe(value),
+                                   joinedNames(kColorSchemeNames)));
+                schemeReported = true;
+            }
+        } else if (key == kColorsKey) {
+            readThemeColors(value, kColorsKey, colors, result.problems);
+        } else {
+            report(result.problems, key, std::format("{} is not part of a theme; ignoring it", key));
+        }
     }
-    result.theme.emplace();
-    readTheme(*theme, *result.theme, result.problems);
+    // A theme made for one scheme would be unreadable in the other, so a
+    // theme names its scheme.
+    if (!scheme) {
+        if (!schemeReported) {
+            report(result.problems, {},
+                   std::format("The file names no colour scheme, {}; no theme read", joinedNames(kColorSchemeNames)));
+        }
+        return result;
+    }
+    result.theme = domain::Theme{.scheme = *scheme, .colors = colors};
     return result;
 }
 
@@ -609,7 +681,7 @@ ThemeReadResult loadThemeFile(const std::filesystem::path& path)
     const std::optional<std::string> text = readText(path);
     if (!text) {
         ThemeReadResult result;
-        report(result.problems, {}, "The file cannot be opened; no colours read");
+        report(result.problems, {}, "The file cannot be opened; no theme read");
         return result;
     }
     return parseTheme(*text);
@@ -618,6 +690,46 @@ ThemeReadResult loadThemeFile(const std::filesystem::path& path)
 std::optional<std::string> saveThemeFile(const std::filesystem::path& path, const domain::Theme& theme)
 {
     return writeThroughTemporaryFile(path, serializeTheme(theme));
+}
+
+ThemeFolderReadResult loadThemeFolder(const std::filesystem::path& directory)
+{
+    ThemeFolderReadResult result;
+    std::error_code error;
+    if (!std::filesystem::exists(directory, error)) {
+        if (error) {
+            report(result.problems, {}, std::format("The themes folder cannot be read: {}", error.message()));
+        }
+        return result;
+    }
+
+    for (std::filesystem::directory_iterator entry(directory, error);
+         !error && entry != std::filesystem::directory_iterator{}; entry.increment(error)) {
+        const std::filesystem::path& path = entry->path();
+        std::error_code typeError;
+        if (!entry->is_regular_file(typeError) ||
+            lowerAscii(fromUtf8(path.extension().u8string())) != kThemeFileExtension) {
+            continue;
+        }
+        const std::string fileName = fromUtf8(path.filename().u8string());
+        std::string name = fromUtf8(path.stem().u8string());
+        if (domain::isBuiltInThemeName(name)) {
+            report(result.problems, fileName,
+                   std::format("{}: {} is the name of a built-in theme; ignoring the file", fileName, name));
+            continue;
+        }
+        ThemeReadResult read = loadThemeFile(path);
+        prefixProblems(read.problems, fileName);
+        std::ranges::move(read.problems, std::back_inserter(result.problems));
+        if (read.theme) {
+            result.themes.push_back(domain::NamedTheme{.name = std::move(name), .theme = *read.theme});
+        }
+    }
+    if (error) {
+        report(result.problems, {}, std::format("The themes folder cannot be read: {}", error.message()));
+    }
+    std::ranges::sort(result.themes, {}, [](const domain::NamedTheme& theme) { return lowerAscii(theme.name); });
+    return result;
 }
 
 } // namespace verdandi::persistence

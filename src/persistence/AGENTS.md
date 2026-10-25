@@ -1,6 +1,6 @@
 # Persistence Module Rules
 
-This module reads and writes what the monitor keeps between runs: the JSON settings file (`settings_file.h`, [DC-123](../../docs/design_decisions.md#dc-123)) and theme files, which are settings files that hold only the theme ([DC-152](../../docs/design_decisions.md#dc-152)), and later, when durable history becomes a feature, a store behind an interface (see [architecture.md — Configuration and persistence](../../docs/architecture.md#configuration-and-persistence)).
+This module reads and writes what the monitor keeps between runs: the JSON settings file (`settings_file.h`, [DC-123](../../docs/design_decisions.md#dc-123)), theme files ([DC-152](../../docs/design_decisions.md#dc-152)) and the themes folder ([DC-153](../../docs/design_decisions.md#dc-153)), and later, when durable history becomes a feature, a store behind an interface (see [architecture.md — Configuration and persistence](../../docs/architecture.md#configuration-and-persistence)).
 
 ## Dependency constraints
 

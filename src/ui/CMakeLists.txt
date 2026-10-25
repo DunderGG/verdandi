@@ -57,7 +57,7 @@ add_library(verdandi_ui STATIC
     text_tone.h
     theme_controller.cpp
     theme_controller.h
-    theme_files.h
+    theme_sources.h
     view_metrics.h
 )
 

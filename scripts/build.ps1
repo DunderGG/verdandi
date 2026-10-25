@@ -69,8 +69,9 @@ Builds the Release configuration (implies -Release) and writes the portable
 zip with CPack's release package preset, after the tests when -Test is also
 supplied (DC-143). build\release\package\Verdandi-<version>-x64.zip holds,
 in a folder of the same name, verdandi.exe, the DLLs and Qt plugins beside
-it, LICENSE.txt, THIRD_PARTY_NOTICES.txt and a settings.json with the default
-settings, which makes the copy portable (DC-131). Verdandi-<version>-x64-symbols.zip
+it, the themes folder (DC-153), LICENSE.txt, THIRD_PARTY_NOTICES.txt and a
+settings.json with the default settings, which makes the copy portable
+(DC-131). Verdandi-<version>-x64-symbols.zip
 holds verdandi.pdb in that folder; keep it, to symbolize the build's crash
 dumps. The script removes the previous run's zips first.
 

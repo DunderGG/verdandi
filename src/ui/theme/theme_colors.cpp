@@ -77,7 +77,8 @@ std::optional<Shades> shadesOf(ThemeColorRole role)
     }
 }
 
-// The colours that the user chose, for the whole application, like its palette.
+// The theme's and the user's colours for the scheme that the application draws
+// in, for the whole application, like its palette.
 domain::Theme& storedCustomColors()
 {
     static domain::Theme colors;
@@ -102,7 +103,11 @@ std::optional<QColor> defaultColor(domain::ThemeColorRole role, bool darkSurface
 
 std::optional<QColor> customColor(domain::ThemeColorRole role, bool darkScheme)
 {
-    const std::optional<domain::RgbColor>& chosen = storedCustomColors().colors(darkScheme)[role];
+    const domain::Theme& theme = storedCustomColors();
+    if ((theme.scheme == domain::ColorScheme::Dark) != darkScheme) {
+        return std::nullopt;
+    }
+    const std::optional<domain::RgbColor>& chosen = theme.colors[role];
     return chosen ? std::optional{toQColor(*chosen)} : std::nullopt;
 }
 

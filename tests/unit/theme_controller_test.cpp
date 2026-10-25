@@ -1,4 +1,5 @@
 #include <array>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -21,11 +22,16 @@
 #include "ui/theme_controller.h"
 
 using verdandi::domain::ColorScheme;
+using verdandi::domain::kDarkTheme;
+using verdandi::domain::kFollowWindowsTheme;
+using verdandi::domain::kLightTheme;
 using verdandi::domain::LogLevel;
+using verdandi::domain::NamedTheme;
 using verdandi::domain::RgbColor;
 using verdandi::domain::Settings;
 using verdandi::domain::Theme;
 using verdandi::domain::ThemeColorRole;
+using verdandi::domain::ThemeColors;
 using verdandi::tests::ScopedColorScheme;
 using verdandi::tests::ScopedStyle;
 using verdandi::ui::colorSchemeName;
@@ -40,6 +46,24 @@ constexpr RgbColor kDarkWindow{.red = 0x10, .green = 0x18, .blue = 0x20};
 constexpr RgbColor kPage{.red = 0xf8, .green = 0xf8, .blue = 0xf0};
 constexpr RgbColor kText{.red = 0x20, .green = 0x30, .blue = 0x40};
 constexpr RgbColor kAccent{.red = 0x80, .green = 0x20, .blue = 0x90};
+
+// The colours of Ocean, a dark theme of the themes folder.
+ThemeColors oceanColors()
+{
+    ThemeColors colors;
+    colors[ThemeColorRole::Window] = kDarkWindow;
+    colors[ThemeColorRole::Accent] = RgbColor{.red = 0xf4, .green = 0xb7, .blue = 0x40};
+    return colors;
+}
+
+// A dark theme and a light one, as the themes folder holds them.
+std::vector<NamedTheme> themesOfTheFolder()
+{
+    return {
+        NamedTheme{.name = "Ocean", .theme = {.scheme = ColorScheme::Dark, .colors = oceanColors()}},
+        NamedTheme{.name = "Paper", .theme = {.scheme = ColorScheme::Light}},
+    };
+}
 
 bool isStyle(const char* name)
 {
@@ -184,28 +208,59 @@ TEST(ThemeController, StyleThatDrawsTheDarkScheme_Kept)
     EXPECT_FALSE(QCoreApplication::testAttribute(Qt::AA_SetPalette));
 }
 
-TEST(ThemeController, SetSettings_EachColorScheme_DrawsInIt)
+TEST(ThemeController, SetSettings_EachTheme_DrawsInItsScheme)
 {
     const Qt::ColorScheme windows = drawnScheme();
     struct Case
     {
         const char* name{};
-        ColorScheme setting{};
+        const char* theme{};
         Qt::ColorScheme expected{};
     };
-    // In this order, so that System follows another scheme.
+    // In this order, so that each case changes the scheme, and Follow Windows
+    // follows another theme.
     const std::array cases{
-        Case{"Light", ColorScheme::Light, Qt::ColorScheme::Light},
-        Case{"Dark", ColorScheme::Dark, Qt::ColorScheme::Dark},
-        Case{"System", ColorScheme::System, windows},
+        Case{"Light", "Light", Qt::ColorScheme::Light},
+        Case{"Dark", "Dark", Qt::ColorScheme::Dark},
+        Case{"A light theme of the folder", "Paper", Qt::ColorScheme::Light},
+        Case{"A dark theme of the folder", "Ocean", Qt::ColorScheme::Dark},
+        Case{"Follow Windows", "Follow Windows", windows},
     };
     ThemeController controller;
+    controller.setThemes(themesOfTheFolder());
 
-    for (const auto& [name, setting, expected] : cases) {
+    for (const auto& [name, theme, expected] : cases) {
         SCOPED_TRACE(name);
-        controller.setSettings(Settings{.colorScheme = setting});
+        controller.setSettings(Settings{.theme = theme});
         EXPECT_EQ(controller.colorScheme(), expected);
+        EXPECT_EQ(controller.themeName(), theme);
     }
+}
+
+TEST(ThemeController, SetSettings_ThemeThatTheThemesLack_DrawsAsFollowWindows)
+{
+    const Qt::ColorScheme windows = drawnScheme();
+    ThemeController controller;
+    controller.setThemes(themesOfTheFolder());
+
+    controller.setSettings(Settings{.theme = "Removed"});
+
+    EXPECT_EQ(controller.themeName(), kFollowWindowsTheme);
+    EXPECT_EQ(controller.colorScheme(), windows);
+}
+
+TEST(ThemeController, SetThemes_OrderedByNameWhateverItsCase)
+{
+    ThemeController controller;
+
+    controller.setThemes({NamedTheme{.name = "ocean"}, NamedTheme{.name = "Verdandi"}, NamedTheme{.name = "Paper"}});
+    controller.addTheme(NamedTheme{.name = "Autumn"});
+
+    std::vector<std::string> names;
+    for (const NamedTheme& theme : controller.themes()) {
+        names.push_back(theme.name);
+    }
+    EXPECT_EQ(names, (std::vector<std::string>{"Autumn", "ocean", "Paper", "Verdandi"}));
 }
 
 TEST(ThemeController, SetSettings_DarkWithTheLightOnlyStyle_DrawsWithFusionUntilLight)
@@ -213,36 +268,56 @@ TEST(ThemeController, SetSettings_DarkWithTheLightOnlyStyle_DrawsWithFusionUntil
     const ScopedStyle vista("windowsvista");
     ThemeController controller;
 
-    controller.setSettings(Settings{.colorScheme = ColorScheme::Dark});
+    controller.setSettings(Settings{.theme = std::string{kDarkTheme}});
     EXPECT_TRUE(isStyle("fusion"));
 
-    controller.setSettings(Settings{.colorScheme = ColorScheme::Light});
+    controller.setSettings(Settings{.theme = std::string{kLightTheme}});
     EXPECT_TRUE(isStyle("windowsvista"));
 }
 
-TEST(ThemeController, SetSettings_UnchangedColorScheme_AsksQtNoMore)
+TEST(ThemeController, SetSettings_AnotherThemeOfTheSameScheme_AsksQtNoMore)
 {
     ThemeController controller;
+    controller.setThemes(themesOfTheFolder());
     const ThemeChangeCounter themeChanges;
 
-    controller.setSettings(Settings{.colorScheme = ColorScheme::Dark});
+    controller.setSettings(Settings{.theme = std::string{kDarkTheme}});
     ASSERT_EQ(themeChanges.count(), 1);
-    controller.setSettings(Settings{.colorScheme = ColorScheme::Dark, .logLevel = LogLevel::Debug});
+    controller.setSettings(Settings{.theme = std::string{kDarkTheme}, .logLevel = LogLevel::Debug});
+    controller.setSettings(Settings{.theme = "Ocean"});
 
     EXPECT_EQ(themeChanges.count(), 1);
 }
 
-TEST(ThemeController, DestroyedAfterChoosingAScheme_GivesBackWindowsScheme)
+TEST(ThemeController, DestroyedAfterChoosingATheme_GivesBackWindowsScheme)
 {
     const Qt::ColorScheme windows = drawnScheme();
-    const ColorScheme other = windows == Qt::ColorScheme::Dark ? ColorScheme::Light : ColorScheme::Dark;
+    const std::string_view other = windows == Qt::ColorScheme::Dark ? kLightTheme : kDarkTheme;
     {
         ThemeController controller;
-        controller.setSettings(Settings{.colorScheme = other});
+        controller.setSettings(Settings{.theme = std::string{other}});
         ASSERT_NE(drawnScheme(), windows);
     }
 
     EXPECT_EQ(drawnScheme(), windows);
+}
+
+TEST(ThemeController, WindowsColorScheme_FollowedOnlyWhileTheApplicationFollowsWindows)
+{
+    const ScopedColorScheme light(Qt::ColorScheme::Light);
+    ThemeController controller;
+    EXPECT_EQ(controller.windowsColorScheme(), ColorScheme::Light);
+
+    // As Qt reports a change of Windows' scheme.
+    QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+    EXPECT_EQ(controller.windowsColorScheme(), ColorScheme::Dark);
+
+    controller.setSettings(Settings{.theme = std::string{kLightTheme}});
+    EXPECT_EQ(controller.windowsColorScheme(), ColorScheme::Dark);
+
+    controller.setSettings(Settings{});
+    EXPECT_EQ(controller.windowsColorScheme(),
+              drawnScheme() == Qt::ColorScheme::Dark ? ColorScheme::Dark : ColorScheme::Light);
 }
 
 TEST(ThemeController, SetSettings_ChosenColours_PaletteRolesAndTheThemeOfTheDrawnScheme)
@@ -250,11 +325,12 @@ TEST(ThemeController, SetSettings_ChosenColours_PaletteRolesAndTheThemeOfTheDraw
     const ScopedColorScheme light(Qt::ColorScheme::Light);
     ThemeController controller;
     Settings settings;
-    settings.theme.light[ThemeColorRole::Window] = kWindow;
-    settings.theme.light[ThemeColorRole::Page] = kPage;
-    settings.theme.light[ThemeColorRole::Text] = kText;
-    settings.theme.light[ThemeColorRole::Accent] = kAccent;
-    settings.theme.dark[ThemeColorRole::Window] = kDarkWindow;
+    ThemeColors& lightColors = settings.themeColors[std::string{kLightTheme}];
+    lightColors[ThemeColorRole::Window] = kWindow;
+    lightColors[ThemeColorRole::Page] = kPage;
+    lightColors[ThemeColorRole::Text] = kText;
+    lightColors[ThemeColorRole::Accent] = kAccent;
+    settings.themeColors[std::string{kDarkTheme}][ThemeColorRole::Window] = kDarkWindow;
 
     controller.setSettings(settings);
 
@@ -265,7 +341,7 @@ TEST(ThemeController, SetSettings_ChosenColours_PaletteRolesAndTheThemeOfTheDraw
     EXPECT_EQ(palette.color(QPalette::Active, QPalette::Text), toQColor(kText));
     EXPECT_EQ(palette.color(QPalette::Active, QPalette::Accent), toQColor(kAccent));
     EXPECT_EQ(palette.color(QPalette::Active, QPalette::Highlight), toQColor(kAccent));
-    EXPECT_EQ(verdandi::ui::theme::customColors(), settings.theme);
+    EXPECT_EQ(verdandi::ui::theme::customColors(), (Theme{.scheme = ColorScheme::Light, .colors = lightColors}));
 }
 
 TEST(ThemeController, SchemeChanges_TheNewSchemesChosenColours)
@@ -273,8 +349,8 @@ TEST(ThemeController, SchemeChanges_TheNewSchemesChosenColours)
     const ScopedColorScheme light(Qt::ColorScheme::Light);
     ThemeController controller;
     Settings settings;
-    settings.theme.light[ThemeColorRole::Window] = kWindow;
-    settings.theme.dark[ThemeColorRole::Window] = kDarkWindow;
+    settings.themeColors[std::string{kLightTheme}][ThemeColorRole::Window] = kWindow;
+    settings.themeColors[std::string{kDarkTheme}][ThemeColorRole::Window] = kDarkWindow;
     controller.setSettings(settings);
     ASSERT_EQ(QApplication::palette().color(QPalette::Window), toQColor(kWindow));
 
@@ -283,13 +359,46 @@ TEST(ThemeController, SchemeChanges_TheNewSchemesChosenColours)
     EXPECT_EQ(QApplication::palette().color(QPalette::Window), toQColor(kDarkWindow));
 }
 
+TEST(ThemeController, SetSettings_ThemeOfTheFolder_ItsColoursWithTheUsersInPlaceOfItsOwn)
+{
+    ThemeController controller;
+    controller.setThemes(themesOfTheFolder());
+    Settings settings{.theme = "Ocean"};
+    settings.themeColors["Ocean"][ThemeColorRole::Accent] = kAccent;
+    // Light's colours are not Ocean's.
+    settings.themeColors[std::string{kLightTheme}][ThemeColorRole::Text] = kText;
+
+    controller.setSettings(settings);
+
+    ThemeColors expected = oceanColors();
+    expected[ThemeColorRole::Accent] = kAccent;
+    const QPalette palette = QApplication::palette();
+    EXPECT_EQ(palette.color(QPalette::Window), toQColor(kDarkWindow));
+    EXPECT_EQ(palette.color(QPalette::Active, QPalette::Accent), toQColor(kAccent));
+    EXPECT_EQ(verdandi::ui::theme::customColors(), (Theme{.scheme = ColorScheme::Dark, .colors = expected}));
+}
+
+TEST(ThemeController, ThemeInUseChanges_DrawsWithItsNewColours)
+{
+    ThemeController controller;
+    controller.setThemes(themesOfTheFolder());
+    controller.setSettings(Settings{.theme = "Ocean"});
+    Theme changed{.scheme = ColorScheme::Dark};
+    changed.colors[ThemeColorRole::Window] = kWindow;
+
+    controller.addTheme(NamedTheme{.name = "Ocean", .theme = changed});
+
+    EXPECT_EQ(QApplication::palette().color(QPalette::Window), toQColor(kWindow));
+    EXPECT_EQ(controller.themes().size(), themesOfTheFolder().size());
+}
+
 TEST(ThemeController, SetSettings_ColoursNoLongerChosen_TheSchemesOwnPalette)
 {
     const ScopedColorScheme light(Qt::ColorScheme::Light);
     ThemeController controller;
     const QColor ownWindow = QApplication::palette().color(QPalette::Window);
     Settings settings;
-    settings.theme.light[ThemeColorRole::Window] = kWindow;
+    settings.themeColors[std::string{kLightTheme}][ThemeColorRole::Window] = kWindow;
     controller.setSettings(settings);
 
     controller.setSettings(Settings{});
@@ -306,7 +415,7 @@ TEST(ThemeController, ChosenTextWithFusion_FusionsDarkSurfacesKept)
     ThemeController controller;
     const QColor fusionBase = QApplication::palette().color(QPalette::Base);
     Settings settings;
-    settings.theme.dark[ThemeColorRole::Text] = kText;
+    settings.themeColors[std::string{kDarkTheme}][ThemeColorRole::Text] = kText;
 
     controller.setSettings(settings);
 
@@ -319,7 +428,8 @@ TEST(ThemeController, Destroyed_ClearsTheChosenColours)
 {
     {
         ThemeController controller;
-        controller.setSettings(Settings{.theme = verdandi::tests::themeWith(ThemeColorRole::Good, false, kPage)});
+        controller.setThemes(themesOfTheFolder());
+        controller.setSettings(Settings{.theme = "Ocean"});
         ASSERT_NE(verdandi::ui::theme::customColors(), Theme{});
     }
 

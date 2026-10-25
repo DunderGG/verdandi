@@ -6,12 +6,16 @@
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <initializer_list>
+#include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
@@ -24,6 +28,7 @@
 #include <QFrame>
 #include <QGridLayout>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayoutItem>
@@ -32,9 +37,11 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
+#include <QStyleHints>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -64,12 +71,6 @@ constexpr std::array kLogLevelItems{
     ComboItem<domain::LogLevel>{"Error", domain::LogLevel::Error},
     ComboItem<domain::LogLevel>{"Critical", domain::LogLevel::Critical},
     ComboItem<domain::LogLevel>{"Off", domain::LogLevel::Off},
-};
-
-constexpr std::array kColorSchemeItems{
-    ComboItem<domain::ColorScheme>{"Follow Windows", domain::ColorScheme::System},
-    ComboItem<domain::ColorScheme>{"Light", domain::ColorScheme::Light},
-    ComboItem<domain::ColorScheme>{"Dark", domain::ColorScheme::Dark},
 };
 
 constexpr std::array kByteUnitsItems{
@@ -132,12 +133,31 @@ constexpr int kColorListHeight = 320;
 // What the file dialogs of Import... and Export... offer: theme files, which
 // are JSON, as settings files are (DC-152).
 constexpr const char* kThemeFileFilter = "Themes (*.json);;All files (*)";
-const QString kDefaultThemeFileName = "Verdandi theme.json";
 
 // The folder that the file dialogs open in: the user's documents.
 QString themeFolder()
 {
     return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+}
+
+QString toQString(std::string_view text)
+{
+    return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
+}
+
+// The name that Export... offers for a file of the theme named name. Its
+// name, which names the theme it imports as, unless a built-in theme's,
+// which no theme file can take.
+QString defaultThemeFileName(const std::string& name)
+{
+    const QString themeName = QString::fromStdString(name);
+    return QString("%1.json").arg(domain::isBuiltInThemeName(name) ? QString("My %1 theme").arg(themeName.toLower())
+                                                                   : themeName);
+}
+
+QString nativePath(const std::filesystem::path& path)
+{
+    return QDir::toNativeSeparators(QString::fromStdWString(path.wstring()));
 }
 
 // Opens a window-modal warning over parent that says text, then details, such
@@ -180,17 +200,6 @@ template <typename Enum> void selectValue(QComboBox* comboBox, Enum value)
 template <typename Enum> Enum selectedValue(const QComboBox* comboBox)
 {
     return static_cast<Enum>(comboBox->currentData().toInt());
-}
-
-// A heading above a column of the colour list.
-QLabel* columnHeading(const QString& text, QWidget* parent)
-{
-    auto* heading = new QLabel(text, parent);
-    QFont headingFont = heading->font();
-    headingFont.setBold(true);
-    heading->setFont(headingFont);
-    heading->setAlignment(Qt::AlignCenter);
-    return heading;
 }
 
 // Widens the label column of each form to the widest of them, so that the
@@ -276,16 +285,22 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
     generalPageLayout->addWidget(dashboardGroup);
     generalPageLayout->addStretch();
 
-    m_colorSchemeComboBox = createComboBox(kColorSchemeItems, this);
-    m_colorSchemeComboBox->setToolTip(
-        "Light or dark, or the one Windows sets for apps. A Windows contrast theme replaces both.");
-    auto* colorSchemeLayout = new QFormLayout();
-    colorSchemeLayout->addRow("Colour &scheme:", m_colorSchemeComboBox);
+    m_themeComboBox = new QComboBox(this);
+    m_themeComboBox->setToolTip("Light or Dark, the one of them that Windows sets for apps, or a theme of the themes "
+                                "folder beside verdandi.exe. A Windows contrast theme replaces them all.");
+    // fillThemeList() blocks the signal, so this follows the user's choice.
+    connect(m_themeComboBox, &QComboBox::currentIndexChanged, this, [this] {
+        keepShownColors();
+        m_chosenTheme = m_themeComboBox->currentData().toString().toStdString();
+        showTheme(themeToShow());
+    });
+    auto* themeLayout = new QFormLayout();
+    themeLayout->addRow("&Theme:", m_themeComboBox);
 
     auto* appearancePage = new QWidget(this);
     auto* appearancePageLayout = new QVBoxLayout(appearancePage);
     appearancePageLayout->setSpacing(kSectionSpacing);
-    appearancePageLayout->addLayout(colorSchemeLayout);
+    appearancePageLayout->addLayout(themeLayout);
     appearancePageLayout->addWidget(createColorsGroup());
 
     m_tabWidget = new QTabWidget(this);
@@ -316,32 +331,24 @@ QGroupBox* SettingsDialog::createColorsGroup()
     auto* grid = new QGridLayout(list);
     grid->setHorizontalSpacing(kItemSpacing);
     grid->setColumnStretch(1, 1);
-    grid->setColumnStretch(2, 1);
     int row = 0;
-    grid->addWidget(columnHeading("Light", list), row, 1);
-    grid->addWidget(columnHeading("Dark", list), row, 2);
-    ++row;
-
     for (const ColorRow& entry : kColorRows) {
         if (entry.heading != nullptr) {
             auto* heading = new QLabel(entry.heading, list);
             QFont headingFont = heading->font();
             headingFont.setBold(true);
             heading->setFont(headingFont);
-            grid->addWidget(heading, row, 0, 1, 3);
+            grid->addWidget(heading, row, 0, 1, 2);
             ++row;
         }
         auto* label = new QLabel(entry.label, list);
         label->setToolTip(entry.toolTip);
         grid->addWidget(label, row, 0);
-        for (const bool isDark : {false, true}) {
-            auto* button = new ColorButton(list);
-            button->setDefaultColor(theme::defaultColor(entry.role, isDark));
-            button->setDialogTitle(QString("%1 in the %2 scheme").arg(entry.label, isDark ? "dark" : "light"));
-            button->setToolTip(entry.toolTip);
-            grid->addWidget(button, row, isDark ? 2 : 1);
-            m_colorButtons[isDark ? 1 : 0][static_cast<std::size_t>(entry.role)] = button;
-        }
+        // showTheme() gives each its default colour and its dialog's title.
+        auto* button = new ColorButton(list);
+        button->setToolTip(entry.toolTip);
+        grid->addWidget(button, row, 1);
+        m_colorButtons[static_cast<std::size_t>(entry.role)] = button;
         ++row;
     }
 
@@ -355,27 +362,33 @@ QGroupBox* SettingsDialog::createColorsGroup()
     scrollArea->setMinimumWidth(list->sizeHint().width() + scrollArea->verticalScrollBar()->sizeHint().width());
 
     m_importThemeButton = new QPushButton("&Import...", this);
-    m_importThemeButton->setToolTip("Show the colours of a theme file, or of a settings file");
+    m_importThemeButton->setToolTip("Add a theme file to the themes folder, and choose its theme");
     m_importThemeButton->setEnabled(false);
     connect(m_importThemeButton, &QPushButton::clicked, this, &SettingsDialog::chooseThemeToImport);
     m_exportThemeButton = new QPushButton("E&xport...", this);
-    m_exportThemeButton->setToolTip("Write the colours shown here to a theme file, to share them or keep a copy");
+    m_exportThemeButton->setToolTip(
+        "Write the theme shown here, with the colours shown, to a theme file, to share it or keep a copy");
     m_exportThemeButton->setEnabled(false);
     connect(m_exportThemeButton, &QPushButton::clicked, this, &SettingsDialog::chooseThemeFileToExport);
     m_resetColorsButton = new QPushButton("Reset C&olours", this);
-    m_resetColorsButton->setToolTip("Every colour back to its default, in both schemes");
-    connect(m_resetColorsButton, &QPushButton::clicked, this, [this] { setTheme(domain::Theme{}); });
+    m_resetColorsButton->setToolTip("Every colour of the theme shown back to the theme's own");
+    connect(m_resetColorsButton, &QPushButton::clicked, this, [this] {
+        for (ColorButton* button : m_colorButtons) {
+            button->setColor(std::nullopt);
+        }
+    });
     auto* buttonRow = new QHBoxLayout();
     buttonRow->addWidget(m_importThemeButton);
     buttonRow->addWidget(m_exportThemeButton);
     buttonRow->addStretch();
     buttonRow->addWidget(m_resetColorsButton);
 
-    auto* group = new QGroupBox("Colours", this);
-    auto* groupLayout = new QVBoxLayout(group);
+    // showTheme() names the theme in the title.
+    m_colorsGroup = new QGroupBox("Colours", this);
+    auto* groupLayout = new QVBoxLayout(m_colorsGroup);
     groupLayout->addWidget(scrollArea);
     groupLayout->addLayout(buttonRow);
-    return group;
+    return m_colorsGroup;
 }
 
 void SettingsDialog::setSettings(const domain::Settings& settings)
@@ -383,7 +396,6 @@ void SettingsDialog::setSettings(const domain::Settings& settings)
     m_refreshIntervalSpinBox->setValue(toSeconds(domain::nearestRefreshInterval(settings.refreshInterval)));
 
     selectValue(m_logLevelComboBox, settings.logLevel);
-    selectValue(m_colorSchemeComboBox, settings.colorScheme);
     selectValue(m_byteUnitsComboBox, settings.displayUnits.bytes);
     selectValue(m_networkRateUnitsComboBox, settings.displayUnits.networkRates);
 
@@ -393,55 +405,125 @@ void SettingsDialog::setSettings(const domain::Settings& settings)
     m_networkPanelCheckBox->setChecked(settings.dashboardPanels.network);
     m_uptimePanelCheckBox->setChecked(settings.dashboardPanels.uptime);
 
-    setTheme(settings.theme);
+    m_userColors = settings.themeColors;
+    m_chosenTheme = settings.theme;
+    fillThemeList();
+    showTheme(themeToShow());
 }
 
-void SettingsDialog::setThemeFiles(ThemeFiles files)
+void SettingsDialog::setThemeSources(ThemeSources sources)
 {
-    m_themeFiles = std::move(files);
-    m_importThemeButton->setEnabled(static_cast<bool>(m_themeFiles.importTheme));
-    m_exportThemeButton->setEnabled(static_cast<bool>(m_themeFiles.exportTheme));
+    keepShownColors();
+    m_themeSources = std::move(sources);
+    m_themes = m_themeSources.themes ? m_themeSources.themes() : std::vector<domain::NamedTheme>{};
+    m_importThemeButton->setEnabled(m_themeSources.themes && m_themeSources.readTheme && m_themeSources.addTheme);
+    m_exportThemeButton->setEnabled(static_cast<bool>(m_themeSources.exportTheme));
+    fillThemeList();
+    showTheme(themeToShow());
 }
 
 void SettingsDialog::importTheme(const std::filesystem::path& path)
 {
-    if (!m_themeFiles.importTheme) {
+    if (!m_importThemeButton->isEnabled()) {
         return;
     }
-    const ThemeImport imported = m_themeFiles.importTheme(path);
-    if (imported.theme) {
-        setTheme(*imported.theme);
-        if (imported.problems.empty()) {
-            return;
+    const ThemeImport imported = m_themeSources.readTheme(path);
+    if (!imported.theme) {
+        QStringList details{nativePath(path)};
+        for (const std::string& problem : imported.problems) {
+            details.append(QString::fromStdString(problem));
         }
+        openWarning(this, "Import Theme", "No theme was imported.", details.join('\n'));
+        return;
     }
 
-    QStringList details{QDir::toNativeSeparators(QString::fromStdWString(path.wstring()))};
-    for (const std::string& problem : imported.problems) {
-        details.append(QString::fromStdString(problem));
+    // A theme is named after its file, as in the themes folder (DC-153).
+    const QString name = QString::fromStdWString(path.stem().wstring());
+    if (domain::isBuiltInThemeName(name.toStdString())) {
+        openWarning(this, "Import Theme", "No theme was imported.",
+                    QString("%1\n%2 is the name of a built-in theme. Rename the file to import it.")
+                        .arg(nativePath(path), name));
+        return;
     }
-    openWarning(this, "Import Colours",
-                imported.theme ? "The colours were imported, but some in the file were not used."
-                               : "No colours were imported.",
-                details.join('\n'));
+    domain::NamedTheme theme{.name = name.toStdString(), .theme = *imported.theme};
+    // Windows' file names ignore case, so a theme whose name differs only in
+    // case is the same file, which keeps the name it has.
+    const auto existing = std::ranges::find_if(m_themes, [&name](const domain::NamedTheme& candidate) {
+        return QString::fromStdString(candidate.name).compare(name, Qt::CaseInsensitive) == 0;
+    });
+    if (existing == m_themes.end()) {
+        addImportedTheme(theme, path, imported.problems);
+        return;
+    }
+    theme.name = existing->name;
+
+    auto* box = new QMessageBox(
+        QMessageBox::Question, "Import Theme",
+        QString("There is a theme called %1 already. Replace it?").arg(QString::fromStdString(theme.name)),
+        QMessageBox::Yes | QMessageBox::No, this);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    // The name comes from a file, so it is not rich text.
+    box->setTextFormat(Qt::PlainText);
+    box->setInformativeText("The theme takes the file's colours, in place of its own and of those you chose in it.");
+    box->setDefaultButton(QMessageBox::No);
+    connect(box, &QMessageBox::buttonClicked, this,
+            [this, box, theme, path, problems = imported.problems](const QAbstractButton* button) {
+                if (button == box->button(QMessageBox::Yes)) {
+                    addImportedTheme(theme, path, problems);
+                }
+            });
+    box->open();
+}
+
+void SettingsDialog::addImportedTheme(const domain::NamedTheme& theme, const std::filesystem::path& path,
+                                      const std::vector<std::string>& problems)
+{
+    if (const std::optional<std::string> error = m_themeSources.addTheme(theme)) {
+        openWarning(this, "Import Theme", "The theme could not be added to the themes folder.",
+                    QString("%1\n%2").arg(nativePath(path), QString::fromStdString(*error)));
+        return;
+    }
+
+    keepShownColors();
+    // The theme shows the file's colours.
+    m_userColors.erase(theme.name);
+    m_themes = m_themeSources.themes();
+    m_chosenTheme = theme.name;
+    fillThemeList();
+    showTheme(themeToShow());
+
+    if (!problems.empty()) {
+        QStringList details{nativePath(path)};
+        for (const std::string& problem : problems) {
+            details.append(QString::fromStdString(problem));
+        }
+        openWarning(this, "Import Theme", "The theme was imported, but some values in the file were not used.",
+                    details.join('\n'));
+    }
 }
 
 void SettingsDialog::exportTheme(const std::filesystem::path& path)
 {
-    if (!m_themeFiles.exportTheme) {
+    if (!m_themeSources.exportTheme) {
         return;
     }
-    if (const std::optional<std::string> error = m_themeFiles.exportTheme(path, shownTheme())) {
-        openWarning(this, "Export Colours", "The colours could not be exported.",
-                    QString("%1\n%2").arg(QDir::toNativeSeparators(QString::fromStdWString(path.wstring())),
-                                          QString::fromStdString(*error)));
+    domain::Theme theme = themeNamed(m_shownTheme);
+    theme.colors = theme.colors.withChanges(shownColors());
+    if (const std::optional<std::string> error = m_themeSources.exportTheme(path, theme)) {
+        openWarning(this, "Export Theme", "The theme could not be exported.",
+                    QString("%1\n%2").arg(nativePath(path), QString::fromStdString(*error)));
     }
+}
+
+const std::string& SettingsDialog::shownThemeName() const
+{
+    return m_shownTheme;
 }
 
 void SettingsDialog::chooseThemeToImport()
 {
     const QString path =
-        QFileDialog::getOpenFileName(this, "Import Colours", themeFolder(), QString::fromLatin1(kThemeFileFilter));
+        QFileDialog::getOpenFileName(this, "Import Theme", themeFolder(), QString::fromLatin1(kThemeFileFilter));
     if (!path.isEmpty()) {
         importTheme(std::filesystem::path{path.toStdWString()});
     }
@@ -449,34 +531,93 @@ void SettingsDialog::chooseThemeToImport()
 
 void SettingsDialog::chooseThemeFileToExport()
 {
-    const QString path = QFileDialog::getSaveFileName(
-        this, "Export Colours", themeFolder() + "/" + kDefaultThemeFileName, QString::fromLatin1(kThemeFileFilter));
+    const QString path =
+        QFileDialog::getSaveFileName(this, "Export Theme", themeFolder() + "/" + defaultThemeFileName(m_shownTheme),
+                                     QString::fromLatin1(kThemeFileFilter));
     if (!path.isEmpty()) {
         exportTheme(std::filesystem::path{path.toStdWString()});
     }
 }
 
-void SettingsDialog::setTheme(const domain::Theme& colors)
+void SettingsDialog::fillThemeList()
 {
-    for (const bool isDark : {false, true}) {
-        const domain::ThemeColors& schemeColors = colors.colors(isDark);
-        for (std::size_t role = 0; role < domain::kThemeColorRoleCount; ++role) {
-            const std::optional<domain::RgbColor>& chosen = schemeColors.colors[role];
-            m_colorButtons[isDark ? 1 : 0][role]->setColor(chosen ? std::optional{theme::toQColor(*chosen)}
-                                                                  : std::nullopt);
-        }
+    const QSignalBlocker blocker(m_themeComboBox);
+    m_themeComboBox->clear();
+    for (const std::string_view name : {domain::kFollowWindowsTheme, domain::kLightTheme, domain::kDarkTheme}) {
+        m_themeComboBox->addItem(toQString(name), toQString(name));
+    }
+    if (!m_themes.empty()) {
+        m_themeComboBox->insertSeparator(m_themeComboBox->count());
+    }
+    for (const domain::NamedTheme& theme : m_themes) {
+        const QString name = QString::fromStdString(theme.name);
+        m_themeComboBox->addItem(name, name);
+    }
+    // A theme that is not in the list stays chosen, for the list that
+    // setThemeSources() fills.
+    const int chosen = m_themeComboBox->findData(QString::fromStdString(m_chosenTheme));
+    m_themeComboBox->setCurrentIndex(chosen >= 0 ? chosen : 0);
+}
+
+void SettingsDialog::showTheme(const std::string& name)
+{
+    m_shownTheme = name;
+    const domain::Theme theme = themeNamed(name);
+    const bool isDark = theme.scheme == domain::ColorScheme::Dark;
+    const auto userColors = m_userColors.find(name);
+    const domain::ThemeColors chosen = userColors != m_userColors.end() ? userColors->second : domain::ThemeColors{};
+    const QString themeName = QString::fromStdString(name);
+    for (const ColorRow& entry : kColorRows) {
+        ColorButton* button = m_colorButtons[static_cast<std::size_t>(entry.role)];
+        const std::optional<domain::RgbColor>& own = theme.colors[entry.role];
+        button->setDefaultColor(own ? std::optional{theme::toQColor(*own)} : theme::defaultColor(entry.role, isDark));
+        const std::optional<domain::RgbColor>& color = chosen[entry.role];
+        button->setColor(color ? std::optional{theme::toQColor(*color)} : std::nullopt);
+        button->setDialogTitle(QString("%1 in %2").arg(entry.label, themeName));
+    }
+    m_colorsGroup->setTitle(QString("Colours of %1").arg(themeName));
+}
+
+void SettingsDialog::keepShownColors()
+{
+    const domain::ThemeColors colors = shownColors();
+    if (colors.empty()) {
+        m_userColors.erase(m_shownTheme);
+    } else {
+        m_userColors[m_shownTheme] = colors;
     }
 }
 
-domain::Theme SettingsDialog::shownTheme() const
+std::string SettingsDialog::themeToShow() const
 {
-    domain::Theme shown;
-    for (const bool isDark : {false, true}) {
-        domain::ThemeColors& schemeColors = isDark ? shown.dark : shown.light;
-        for (std::size_t role = 0; role < domain::kThemeColorRoleCount; ++role) {
-            if (const std::optional<QColor>& chosen = m_colorButtons[isDark ? 1 : 0][role]->color()) {
-                schemeColors.colors[role] = theme::toRgbColor(*chosen);
-            }
+    std::string chosen = m_themeComboBox->currentData().toString().toStdString();
+    if (chosen != domain::kFollowWindowsTheme) {
+        return chosen;
+    }
+    domain::ColorScheme scheme = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark
+                                     ? domain::ColorScheme::Dark
+                                     : domain::ColorScheme::Light;
+    if (m_themeSources.windowsColorScheme) {
+        scheme = m_themeSources.windowsColorScheme();
+    }
+    return std::string{domain::builtInThemeName(scheme)};
+}
+
+domain::Theme SettingsDialog::themeNamed(std::string_view name) const
+{
+    if (name == domain::kDarkTheme) {
+        return domain::Theme{.scheme = domain::ColorScheme::Dark};
+    }
+    const auto theme = std::ranges::find(m_themes, name, &domain::NamedTheme::name);
+    return theme != m_themes.end() ? theme->theme : domain::Theme{};
+}
+
+domain::ThemeColors SettingsDialog::shownColors() const
+{
+    domain::ThemeColors shown;
+    for (std::size_t role = 0; role < domain::kThemeColorRoleCount; ++role) {
+        if (const std::optional<QColor>& chosen = m_colorButtons[role]->color()) {
+            shown.colors[role] = theme::toRgbColor(*chosen);
         }
     }
     return shown;
@@ -484,6 +625,12 @@ domain::Theme SettingsDialog::shownTheme() const
 
 domain::Settings SettingsDialog::settings() const
 {
+    std::map<std::string, domain::ThemeColors, std::less<>> themeColors = m_userColors;
+    if (const domain::ThemeColors shown = shownColors(); shown.empty()) {
+        themeColors.erase(m_shownTheme);
+    } else {
+        themeColors[m_shownTheme] = shown;
+    }
     return domain::Settings{
         .refreshInterval = shownRefreshInterval(),
         .displayUnits =
@@ -499,8 +646,8 @@ domain::Settings SettingsDialog::settings() const
                 .network = m_networkPanelCheckBox->isChecked(),
                 .uptime = m_uptimePanelCheckBox->isChecked(),
             },
-        .colorScheme = selectedValue<domain::ColorScheme>(m_colorSchemeComboBox),
-        .theme = shownTheme(),
+        .theme = m_themeComboBox->currentData().toString().toStdString(),
+        .themeColors = std::move(themeColors),
         .logLevel = selectedValue<domain::LogLevel>(m_logLevelComboBox),
     };
 }
@@ -521,14 +668,19 @@ QComboBox* SettingsDialog::logLevelComboBox() const
     return m_logLevelComboBox;
 }
 
-QComboBox* SettingsDialog::colorSchemeComboBox() const
+QComboBox* SettingsDialog::themeComboBox() const
 {
-    return m_colorSchemeComboBox;
+    return m_themeComboBox;
 }
 
-ColorButton* SettingsDialog::colorButton(domain::ThemeColorRole role, bool darkScheme) const
+ColorButton* SettingsDialog::colorButton(domain::ThemeColorRole role) const
 {
-    return m_colorButtons[darkScheme ? 1 : 0][static_cast<std::size_t>(role)];
+    return m_colorButtons[static_cast<std::size_t>(role)];
+}
+
+QGroupBox* SettingsDialog::colorsGroup() const
+{
+    return m_colorsGroup;
 }
 
 QPushButton* SettingsDialog::resetColorsButton() const

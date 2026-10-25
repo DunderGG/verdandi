@@ -85,16 +85,16 @@ inline constexpr std::array kAppearances{
     Appearance{"dark, windowsvista, drawn with Fusion", Qt::ColorScheme::Dark, "windowsvista"},
 };
 
-/** A theme that chooses color for role in the dark scheme, or in the light scheme if darkScheme is false. */
+/** A theme of the dark scheme, or of the light one if darkScheme is false, that chooses color for role. */
 [[nodiscard]] inline domain::Theme themeWith(domain::ThemeColorRole role, bool darkScheme, domain::RgbColor color)
 {
-    domain::Theme theme;
-    (darkScheme ? theme.dark : theme.light)[role] = color;
+    domain::Theme theme{.scheme = darkScheme ? domain::ColorScheme::Dark : domain::ColorScheme::Light};
+    theme.colors[role] = color;
     return theme;
 }
 
 /**
- * Makes theme the colours that the user chose while it exists, as
+ * Makes theme's colours the chosen colours while it exists, as
  * ui::ThemeController does, and clears them afterwards.
  */
 class ScopedCustomColors

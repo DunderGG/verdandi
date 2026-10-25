@@ -1,15 +1,20 @@
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <gtest/gtest.h>
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QGroupBox>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPoint>
@@ -23,15 +28,15 @@
 #include "ui/color_button.h"
 #include "ui/settings_dialog.h"
 #include "ui/theme/theme_colors.h"
-#include "ui/theme_files.h"
+#include "ui/theme_sources.h"
 
 using namespace verdandi::domain;
 using std::chrono::milliseconds;
 using verdandi::tests::nonDefaultSettings;
 using verdandi::ui::ColorButton;
 using verdandi::ui::SettingsDialog;
-using verdandi::ui::ThemeFiles;
 using verdandi::ui::ThemeImport;
+using verdandi::ui::ThemeSources;
 
 namespace
 {
@@ -47,10 +52,40 @@ template <typename Enum> Enum selectedItem(const QComboBox* comboBox)
     return static_cast<Enum>(comboBox->currentData().toInt());
 }
 
+// Chooses the theme named name in dialog's theme list, as the user does.
+void selectTheme(const SettingsDialog& dialog, const QString& name)
+{
+    dialog.themeComboBox()->setCurrentIndex(dialog.themeComboBox()->findData(name));
+}
+
 // Clicks one of the standard buttons of dialog's button box.
 void clickButton(const SettingsDialog& dialog, QDialogButtonBox::StandardButton button)
 {
     dialog.buttonBox()->button(button)->click();
+}
+
+// Sources whose themes are themes, which addTheme adds to, in place of the
+// one of the same name, as the themes folder does.
+ThemeSources sourcesWith(std::vector<NamedTheme>& themes)
+{
+    return ThemeSources{
+        .themes = [&themes] { return themes; },
+        .readTheme = [](const std::filesystem::path&) { return ThemeImport{}; },
+        .addTheme =
+            [&themes](const NamedTheme& theme) {
+                std::erase_if(themes, [&theme](const NamedTheme& existing) { return existing.name == theme.name; });
+                themes.push_back(theme);
+                return std::optional<std::string>{};
+            },
+    };
+}
+
+// A theme of the dark scheme that chooses its accent.
+Theme oceanTheme()
+{
+    Theme theme{.scheme = ColorScheme::Dark};
+    theme.colors[ThemeColorRole::Accent] = RgbColor{.red = 0xf4, .green = 0xb7, .blue = 0x40};
+    return theme;
 }
 
 } // namespace
@@ -61,7 +96,7 @@ TEST(SettingsDialog, Construction_ControlsShowTheSettings)
 
     EXPECT_DOUBLE_EQ(dialog.refreshIntervalSpinBox()->value(), 2.5);
     EXPECT_EQ(selectedItem<LogLevel>(dialog.logLevelComboBox()), LogLevel::Debug);
-    EXPECT_EQ(selectedItem<ColorScheme>(dialog.colorSchemeComboBox()), ColorScheme::Dark);
+    EXPECT_EQ(dialog.themeComboBox()->currentData().toString(), "Dark");
     EXPECT_EQ(selectedItem<ByteUnits>(dialog.byteUnitsComboBox()), ByteUnits::Decimal);
     EXPECT_EQ(selectedItem<NetworkRateUnits>(dialog.networkRateUnitsComboBox()), NetworkRateUnits::BitsPerSecond);
     EXPECT_FALSE(dialog.cpuPanelCheckBox()->isChecked());
@@ -69,10 +104,11 @@ TEST(SettingsDialog, Construction_ControlsShowTheSettings)
     EXPECT_FALSE(dialog.diskPanelCheckBox()->isChecked());
     EXPECT_FALSE(dialog.networkPanelCheckBox()->isChecked());
     EXPECT_FALSE(dialog.uptimePanelCheckBox()->isChecked());
-    EXPECT_EQ(dialog.colorButton(ThemeColorRole::Page, false)->color(), QColor(0xf0, 0xf0, 0xf0));
-    EXPECT_EQ(dialog.colorButton(ThemeColorRole::Card, true)->color(), QColor(0x20, 0x20, 0x20));
-    EXPECT_FALSE(dialog.colorButton(ThemeColorRole::Page, true)->color().has_value());
-    EXPECT_FALSE(dialog.colorButton(ThemeColorRole::Card, false)->color().has_value());
+    // The colours of the theme chosen, Dark, and not those chosen in Light.
+    EXPECT_EQ(dialog.shownThemeName(), "Dark");
+    EXPECT_EQ(dialog.colorsGroup()->title(), "Colours of Dark");
+    EXPECT_EQ(dialog.colorButton(ThemeColorRole::Card)->color(), QColor(0x20, 0x20, 0x20));
+    EXPECT_FALSE(dialog.colorButton(ThemeColorRole::Page)->color().has_value());
 }
 
 TEST(SettingsDialog, ControlsEdited_SettingsReturnsWhatTheyShow)
@@ -81,7 +117,6 @@ TEST(SettingsDialog, ControlsEdited_SettingsReturnsWhatTheyShow)
 
     dialog.refreshIntervalSpinBox()->setValue(2.5);
     selectItem(dialog.logLevelComboBox(), LogLevel::Debug);
-    selectItem(dialog.colorSchemeComboBox(), ColorScheme::Dark);
     selectItem(dialog.byteUnitsComboBox(), ByteUnits::Decimal);
     selectItem(dialog.networkRateUnitsComboBox(), NetworkRateUnits::BitsPerSecond);
     dialog.cpuPanelCheckBox()->setChecked(false);
@@ -89,43 +124,112 @@ TEST(SettingsDialog, ControlsEdited_SettingsReturnsWhatTheyShow)
     dialog.diskPanelCheckBox()->setChecked(false);
     dialog.networkPanelCheckBox()->setChecked(false);
     dialog.uptimePanelCheckBox()->setChecked(false);
-    dialog.colorButton(ThemeColorRole::Page, false)->setColor(QColor(0xf0, 0xf0, 0xf0));
-    dialog.colorButton(ThemeColorRole::Card, true)->setColor(QColor(0x20, 0x20, 0x20));
+    // The colour chosen in Light stays when another theme is chosen.
+    selectTheme(dialog, "Light");
+    dialog.colorButton(ThemeColorRole::Page)->setColor(QColor(0xf0, 0xf0, 0xf0));
+    selectTheme(dialog, "Dark");
+    dialog.colorButton(ThemeColorRole::Card)->setColor(QColor(0x20, 0x20, 0x20));
 
     EXPECT_EQ(dialog.settings(), nonDefaultSettings());
 }
 
-TEST(SettingsDialog, ColorButtons_OnTheAppearanceTabWithTheDefaultsOfTheirScheme)
+TEST(SettingsDialog, ThemeList_TheBuiltInThemesThenTheThemesFolders)
 {
-    const SettingsDialog dialog(Settings{});
+    std::vector<NamedTheme> themes{{.name = "Ocean"}, {.name = "Verdandi"}};
+    SettingsDialog dialog(Settings{});
+
+    dialog.setThemeSources(sourcesWith(themes));
+
+    const QComboBox* list = dialog.themeComboBox();
+    EXPECT_TRUE(dialog.tabWidget()->widget(1)->isAncestorOf(list));
+    EXPECT_EQ(dialog.tabWidget()->tabText(1), "Appearance");
+    // A separator, which has no text, comes before the themes folder's.
+    const std::array<QString, 6> expected{"Follow Windows", "Light", "Dark", "", "Ocean", "Verdandi"};
+    ASSERT_EQ(list->count(), static_cast<int>(expected.size()));
+    for (std::size_t index = 0; index < expected.size(); ++index) {
+        SCOPED_TRACE(index);
+        EXPECT_EQ(list->itemText(static_cast<int>(index)), expected[index]);
+        EXPECT_EQ(list->itemData(static_cast<int>(index)).toString(), expected[index]);
+    }
+}
+
+TEST(SettingsDialog, ColorButtons_ShowTheThemesOwnColoursAsTheirDefaults)
+{
+    std::vector<NamedTheme> themes{{.name = "Ocean", .theme = oceanTheme()}};
+    SettingsDialog dialog(Settings{});
+    dialog.setThemeSources(sourcesWith(themes));
     const QWidget* appearance = dialog.tabWidget()->widget(1);
 
-    EXPECT_EQ(dialog.tabWidget()->tabText(1), "Appearance");
-    EXPECT_TRUE(appearance->isAncestorOf(dialog.colorSchemeComboBox()));
-    for (std::size_t index = 0; index < kThemeColorRoleCount; ++index) {
-        const auto role = static_cast<ThemeColorRole>(index);
-        SCOPED_TRACE(index);
-        for (const bool isDark : {false, true}) {
-            const ColorButton* button = dialog.colorButton(role, isDark);
+    for (const std::string_view theme : {"Light", "Dark", "Ocean"}) {
+        SCOPED_TRACE(theme);
+        selectTheme(dialog, QString::fromUtf8(theme.data(), static_cast<qsizetype>(theme.size())));
+        const bool isDark = theme != "Light";
+        for (std::size_t index = 0; index < kThemeColorRoleCount; ++index) {
+            const auto role = static_cast<ThemeColorRole>(index);
+            SCOPED_TRACE(index);
+            const ColorButton* button = dialog.colorButton(role);
             ASSERT_NE(button, nullptr);
             EXPECT_TRUE(appearance->isAncestorOf(button));
-            EXPECT_EQ(button->defaultColor(), verdandi::ui::theme::defaultColor(role, isDark));
+            const std::optional<QColor> expected =
+                theme == "Ocean" && role == ThemeColorRole::Accent
+                    ? std::optional{verdandi::ui::theme::toQColor(*oceanTheme().colors[ThemeColorRole::Accent])}
+                    : verdandi::ui::theme::defaultColor(role, isDark);
+            EXPECT_EQ(button->defaultColor(), expected);
+            EXPECT_FALSE(button->color().has_value());
         }
     }
 }
 
-TEST(SettingsDialog, ResetColours_EveryColourToItsDefaultAndTheRestAsShown)
+TEST(SettingsDialog, FollowWindows_ShowsTheColoursOfTheThemeOfWindowsScheme)
+{
+    for (const ColorScheme scheme : {ColorScheme::Light, ColorScheme::Dark}) {
+        const std::string expected{builtInThemeName(scheme)};
+        SCOPED_TRACE(expected);
+        Settings settings;
+        settings.themeColors[expected][ThemeColorRole::Accent] = RgbColor{.red = 0x12, .green = 0x34, .blue = 0x56};
+        SettingsDialog dialog(settings);
+
+        dialog.setThemeSources(ThemeSources{.windowsColorScheme = [scheme] { return scheme; }});
+
+        EXPECT_EQ(dialog.themeComboBox()->currentData().toString(), "Follow Windows");
+        EXPECT_EQ(dialog.shownThemeName(), expected);
+        EXPECT_EQ(dialog.colorButton(ThemeColorRole::Accent)->color(), QColor(0x12, 0x34, 0x56));
+        EXPECT_EQ(dialog.settings(), settings);
+    }
+}
+
+TEST(SettingsDialog, ThemeOfTheFolderChosen_SelectedOnceTheThemesAreSet)
+{
+    std::vector<NamedTheme> themes{{.name = "Ocean", .theme = oceanTheme()}};
+    SettingsDialog dialog(Settings{.theme = "Ocean"});
+
+    dialog.setThemeSources(sourcesWith(themes));
+
+    EXPECT_EQ(dialog.themeComboBox()->currentData().toString(), "Ocean");
+    EXPECT_EQ(dialog.shownThemeName(), "Ocean");
+    EXPECT_EQ(dialog.settings().theme, "Ocean");
+}
+
+TEST(SettingsDialog, ThemeNotInTheList_FollowWindowsSelected)
+{
+    const SettingsDialog dialog(Settings{.theme = "Removed"});
+
+    EXPECT_EQ(dialog.themeComboBox()->currentData().toString(), "Follow Windows");
+    EXPECT_EQ(dialog.settings().theme, kFollowWindowsTheme);
+}
+
+TEST(SettingsDialog, ResetColours_EveryColourOfTheThemeShownToItsOwn)
 {
     SettingsDialog dialog(nonDefaultSettings());
     Settings expected = nonDefaultSettings();
-    expected.theme = Theme{};
+    expected.themeColors.erase(std::string{kDarkTheme});
 
     dialog.resetColorsButton()->click();
 
     EXPECT_EQ(dialog.settings(), expected);
 }
 
-TEST(SettingsDialog, SetSettings_EachLogLevelColorSchemeAndUnit_SettingsReturnsIt)
+TEST(SettingsDialog, SetSettings_EachLogLevelThemeAndUnit_SettingsReturnsIt)
 {
     struct Case
     {
@@ -140,9 +244,9 @@ TEST(SettingsDialog, SetSettings_EachLogLevelColorSchemeAndUnit_SettingsReturnsI
         Case{"Error", {.logLevel = LogLevel::Error}},
         Case{"Critical", {.logLevel = LogLevel::Critical}},
         Case{"Off", {.logLevel = LogLevel::Off}},
-        Case{"System", {.colorScheme = ColorScheme::System}},
-        Case{"Light", {.colorScheme = ColorScheme::Light}},
-        Case{"Dark", {.colorScheme = ColorScheme::Dark}},
+        Case{"Follow Windows", {.theme = std::string{kFollowWindowsTheme}}},
+        Case{"Light", {.theme = std::string{kLightTheme}}},
+        Case{"Dark", {.theme = std::string{kDarkTheme}}},
         Case{"Binary", {.displayUnits = {.bytes = ByteUnits::Binary}}},
         Case{"Decimal", {.displayUnits = {.bytes = ByteUnits::Decimal}}},
         Case{"BytesPerSecond", {.displayUnits = {.networkRates = NetworkRateUnits::BytesPerSecond}}},
@@ -157,7 +261,7 @@ TEST(SettingsDialog, SetSettings_EachLogLevelColorSchemeAndUnit_SettingsReturnsI
         EXPECT_EQ(dialog.settings(), settings);
         // A value without an item would leave the combo box with none selected.
         EXPECT_NE(dialog.logLevelComboBox()->currentIndex(), -1);
-        EXPECT_NE(dialog.colorSchemeComboBox()->currentIndex(), -1);
+        EXPECT_NE(dialog.themeComboBox()->currentIndex(), -1);
         EXPECT_NE(dialog.byteUnitsComboBox()->currentIndex(), -1);
         EXPECT_NE(dialog.networkRateUnitsComboBox()->currentIndex(), -1);
     }
@@ -262,45 +366,60 @@ TEST(SettingsDialog, OkAndCancel_AcceptAndReject)
     }
 }
 
-TEST(SettingsDialog, ThemeFileButtons_DisabledUntilTheirFunctionsAreSet)
+TEST(SettingsDialog, ThemeFileButtons_DisabledUntilTheFunctionsTheyNeedAreSet)
 {
+    std::vector<NamedTheme> themes;
     SettingsDialog dialog(Settings{});
     ASSERT_FALSE(dialog.importThemeButton()->isEnabled());
     ASSERT_FALSE(dialog.exportThemeButton()->isEnabled());
 
-    dialog.setThemeFiles(ThemeFiles{.importTheme = [](const std::filesystem::path&) { return ThemeImport{}; }});
+    ThemeSources sources = sourcesWith(themes);
+    sources.addTheme = {};
+    dialog.setThemeSources(sources);
+    EXPECT_FALSE(dialog.importThemeButton()->isEnabled());
+    EXPECT_FALSE(dialog.exportThemeButton()->isEnabled());
 
+    dialog.setThemeSources(sourcesWith(themes));
     EXPECT_TRUE(dialog.importThemeButton()->isEnabled());
     EXPECT_FALSE(dialog.exportThemeButton()->isEnabled());
 }
 
-TEST(SettingsDialog, ImportTheme_ColoursRead_ShownAndNothingElseChanged)
+TEST(SettingsDialog, ImportTheme_ThemeRead_AddedToTheFolderAndChosenWithItsOwnColours)
 {
-    SettingsDialog dialog(Settings{.colorScheme = ColorScheme::Light});
+    std::vector<NamedTheme> themes;
+    SettingsDialog dialog(Settings{});
+    ThemeSources sources = sourcesWith(themes);
     std::filesystem::path read;
-    dialog.setThemeFiles(ThemeFiles{.importTheme = [&read](const std::filesystem::path& path) {
+    sources.readTheme = [&read](const std::filesystem::path& path) {
         read = path;
-        return ThemeImport{.theme = nonDefaultSettings().theme};
-    }});
+        return ThemeImport{.theme = oceanTheme()};
+    };
+    dialog.setThemeSources(sources);
 
     dialog.importTheme("C:\\Themes\\Ocean.json");
 
     EXPECT_EQ(read, std::filesystem::path{"C:\\Themes\\Ocean.json"});
-    EXPECT_EQ(dialog.settings(), (Settings{.colorScheme = ColorScheme::Light, .theme = nonDefaultSettings().theme}));
+    EXPECT_EQ(themes, (std::vector<NamedTheme>{{.name = "Ocean", .theme = oceanTheme()}}));
+    EXPECT_EQ(dialog.themeComboBox()->currentData().toString(), "Ocean");
+    EXPECT_EQ(dialog.colorButton(ThemeColorRole::Accent)->defaultColor(), QColor(0xf4, 0xb7, 0x40));
+    EXPECT_EQ(dialog.settings(), Settings{.theme = "Ocean"});
     EXPECT_EQ(dialog.findChild<QMessageBox*>(), nullptr);
 }
 
-TEST(SettingsDialog, ImportTheme_SomeColoursNotUsed_ShownAndAWarningSaysWhichAsPlainText)
+TEST(SettingsDialog, ImportTheme_SomeValuesNotUsed_AddedAndAWarningSaysWhichAsPlainText)
 {
+    std::vector<NamedTheme> themes;
     SettingsDialog dialog(Settings{});
-    dialog.setThemeFiles(ThemeFiles{.importTheme = [](const std::filesystem::path&) {
-        return ThemeImport{.theme = nonDefaultSettings().theme,
-                           .problems = {"theme.dark.page is \"<b>black</b>\", not a colour written as #rrggbb"}};
-    }});
+    ThemeSources sources = sourcesWith(themes);
+    sources.readTheme = [](const std::filesystem::path&) {
+        return ThemeImport{.theme = oceanTheme(),
+                           .problems = {"colors.page is \"<b>black</b>\", not a colour written as #rrggbb"}};
+    };
+    dialog.setThemeSources(sources);
 
     dialog.importTheme("C:\\Themes\\Ocean.json");
 
-    EXPECT_EQ(dialog.settings().theme, nonDefaultSettings().theme);
+    EXPECT_EQ(dialog.settings().theme, "Ocean");
     const auto* box = dialog.findChild<QMessageBox*>();
     ASSERT_NE(box, nullptr);
     EXPECT_TRUE(box->isVisible());
@@ -311,46 +430,119 @@ TEST(SettingsDialog, ImportTheme_SomeColoursNotUsed_ShownAndAWarningSaysWhichAsP
     EXPECT_TRUE(box->informativeText().contains("<b>black</b>"));
 }
 
-TEST(SettingsDialog, ImportTheme_NoColoursRead_KeptAndAWarningSaysWhy)
+TEST(SettingsDialog, ImportTheme_NotImported_NothingAddedAndAWarningSaysWhy)
 {
-    SettingsDialog dialog(nonDefaultSettings());
-    dialog.setThemeFiles(ThemeFiles{.importTheme = [](const std::filesystem::path&) {
-        return ThemeImport{.problems = {"The file holds no theme; no colours read"}};
-    }});
+    struct Case
+    {
+        const char* name{};
+        const char* path{};
+        ThemeImport imported{};
+        const char* reason{};
+    };
+    const std::array cases{
+        Case{"No theme read", "C:\\Themes\\Ocean.json",
+             ThemeImport{.problems = {"The file names no colour scheme, light, dark; no theme read"}},
+             "names no colour scheme"},
+        Case{"A built-in theme's name", "C:\\Themes\\dark.json", ThemeImport{.theme = oceanTheme()},
+             "dark is the name of a built-in theme"},
+    };
 
-    dialog.importTheme("C:\\Themes\\settings.json");
+    for (const auto& [name, path, imported, reason] : cases) {
+        SCOPED_TRACE(name);
+        std::vector<NamedTheme> themes;
+        SettingsDialog dialog(nonDefaultSettings());
+        ThemeSources sources = sourcesWith(themes);
+        sources.readTheme = [result = imported](const std::filesystem::path&) { return result; };
+        dialog.setThemeSources(sources);
 
-    EXPECT_EQ(dialog.settings(), nonDefaultSettings());
-    const auto* box = dialog.findChild<QMessageBox*>();
-    ASSERT_NE(box, nullptr);
-    EXPECT_TRUE(box->informativeText().contains("The file holds no theme"));
+        dialog.importTheme(path);
+
+        EXPECT_TRUE(themes.empty());
+        EXPECT_EQ(dialog.settings(), nonDefaultSettings());
+        const auto* box = dialog.findChild<QMessageBox*>();
+        ASSERT_NE(box, nullptr);
+        EXPECT_EQ(box->text(), "No theme was imported.");
+        EXPECT_TRUE(box->informativeText().contains(path));
+        EXPECT_TRUE(box->informativeText().contains(reason));
+    }
 }
 
-TEST(SettingsDialog, ExportTheme_WritesTheColoursShown)
+TEST(SettingsDialog, ImportTheme_ThemeOfThatNameExists_ReplacedOnlyIfTheUserAgrees)
+{
+    std::vector<NamedTheme> themes{{.name = "Ocean", .theme = {.scheme = ColorScheme::Light}}};
+    Settings settings{.theme = "Ocean"};
+    settings.themeColors["Ocean"][ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
+    SettingsDialog dialog(settings);
+    ThemeSources sources = sourcesWith(themes);
+    sources.readTheme = [](const std::filesystem::path&) { return ThemeImport{.theme = oceanTheme()}; };
+    dialog.setThemeSources(sources);
+
+    for (const QMessageBox::StandardButton answer : {QMessageBox::No, QMessageBox::Yes}) {
+        SCOPED_TRACE(answer == QMessageBox::Yes ? "Yes" : "No");
+        // The theme keeps the name it has, whatever the case of the file's.
+        dialog.importTheme("C:\\Themes\\ocean.json");
+        auto* box = dialog.findChild<QMessageBox*>();
+        ASSERT_NE(box, nullptr);
+        EXPECT_EQ(box->icon(), QMessageBox::Question);
+        EXPECT_EQ(box->windowModality(), Qt::WindowModal);
+        EXPECT_TRUE(box->text().contains("Ocean"));
+        box->button(answer)->click();
+        delete box;
+    }
+
+    EXPECT_EQ(themes, (std::vector<NamedTheme>{{.name = "Ocean", .theme = oceanTheme()}}));
+    // The theme shows the file's colours, without those chosen in it before.
+    EXPECT_EQ(dialog.settings(), Settings{.theme = "Ocean"});
+}
+
+TEST(SettingsDialog, ImportTheme_NotAdded_AWarningSaysWhy)
 {
     SettingsDialog dialog(Settings{});
-    dialog.colorButton(ThemeColorRole::Card, true)->setColor(QColor(0x20, 0x20, 0x20));
+    std::vector<NamedTheme> themes;
+    ThemeSources sources = sourcesWith(themes);
+    sources.readTheme = [](const std::filesystem::path&) { return ThemeImport{.theme = oceanTheme()}; };
+    sources.addTheme = [](const NamedTheme&) {
+        return std::optional<std::string>{"Cannot replace the file: Access is denied."};
+    };
+    dialog.setThemeSources(sources);
+
+    dialog.importTheme("C:\\Themes\\Ocean.json");
+
+    EXPECT_EQ(dialog.settings(), Settings{});
+    const auto* box = dialog.findChild<QMessageBox*>();
+    ASSERT_NE(box, nullptr);
+    EXPECT_TRUE(box->informativeText().contains("C:\\Themes\\Ocean.json"));
+    EXPECT_TRUE(box->informativeText().contains("Access is denied."));
+}
+
+TEST(SettingsDialog, ExportTheme_WritesTheThemeShownWithTheColoursShown)
+{
+    std::vector<NamedTheme> themes{{.name = "Ocean", .theme = oceanTheme()}};
+    SettingsDialog dialog(Settings{.theme = "Ocean"});
+    ThemeSources sources = sourcesWith(themes);
     std::filesystem::path written;
     Theme writtenTheme;
-    dialog.setThemeFiles(
-        ThemeFiles{.exportTheme = [&written, &writtenTheme](const std::filesystem::path& path, const Theme& theme) {
-            written = path;
-            writtenTheme = theme;
-            return std::optional<std::string>{};
-        }});
+    sources.exportTheme = [&written, &writtenTheme](const std::filesystem::path& path, const Theme& theme) {
+        written = path;
+        writtenTheme = theme;
+        return std::optional<std::string>{};
+    };
+    dialog.setThemeSources(sources);
+    dialog.colorButton(ThemeColorRole::Card)->setColor(QColor(0x20, 0x20, 0x20));
 
     dialog.exportTheme("C:\\Themes\\Mine.json");
 
+    Theme expected = oceanTheme();
+    expected.colors[ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
     EXPECT_EQ(written, std::filesystem::path{"C:\\Themes\\Mine.json"});
-    EXPECT_EQ(writtenTheme, dialog.settings().theme);
-    EXPECT_TRUE(writtenTheme.dark[ThemeColorRole::Card].has_value());
+    EXPECT_EQ(writtenTheme, expected);
     EXPECT_EQ(dialog.findChild<QMessageBox*>(), nullptr);
 }
 
 TEST(SettingsDialog, ExportTheme_NotWritten_AWarningSaysWhy)
 {
     SettingsDialog dialog(Settings{});
-    dialog.setThemeFiles(ThemeFiles{.exportTheme = [](const std::filesystem::path&, const Theme&) {
+    dialog.setThemeSources(ThemeSources{.exportTheme = [](const std::filesystem::path&, const Theme&) {
         return std::optional<std::string>{"Cannot replace the file: Access is denied."};
     }});
 

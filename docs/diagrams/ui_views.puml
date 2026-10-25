@@ -6,7 +6,7 @@ title ui: the views and the presentation state they keep
 package "ui" $UI_COLOR {
     class MainWindow <<QMainWindow>> {
         setSettings(settings : Settings)
-        setThemeFiles(files : ThemeFiles)
+        setThemeSources(sources : ThemeSources)
         bringToFront()
         .. slot ..
         onSnapshotReady(snapshot : SystemSnapshot)
@@ -16,11 +16,13 @@ package "ui" $UI_COLOR {
 
     class SettingsDialog <<QDialog>> {
         settings() : Settings
-        colorButton(role, darkScheme) : ColorButton
+        colorButton(role) : ColorButton
     }
 
     class ThemeController <<QObject>> {
         colorScheme() : Qt::ColorScheme
+        setThemes(themes : vector<NamedTheme>)
+        themeName() : string
         setSettings(settings : Settings)
         .. signal ..
         colorSchemeChanged(scheme)
@@ -75,8 +77,11 @@ package "ui" $UI_COLOR {
         {field} function<ProcessTerminationResult(const ProcessInfo&)>
     }
 
-    struct ThemeFiles {
-        {field} importTheme : function<ThemeImport(path)>
+    struct ThemeSources {
+        {field} themes : function<vector<NamedTheme>()>
+        {field} windowsColorScheme : function<ColorScheme()>
+        {field} readTheme : function<ThemeImport(path)>
+        {field} addTheme : function<optional<string>(NamedTheme)>
         {field} exportTheme : function<optional<string>(path, Theme)>
     }
 
@@ -113,8 +118,8 @@ package "app" $APP_COLOR {
 SamplingScheduler ..> MainWindow : snapshotReady → onSnapshotReady,\nQt::QueuedConnection
 mainCpp ..> MainWindow : sets the settings, and connects\nsettingsChanged → SettingsService::change(),\nwhich applies and saves them
 mainCpp ..> ProcessesView : terminateOwnedProcess,\nthe monitor's identity
-mainCpp ..> ThemeFiles : loadThemeFile,\nsaveThemeFile
-mainCpp ..> ThemeController : creates before the window, gives it\nthe settings then and after settingsChanged,\nand logs the colour scheme
+mainCpp ..> ThemeSources : the controller's themes,\nloadThemeFile, saveThemeFile
+mainCpp ..> ThemeController : creates before the window, gives it\nthe themes folder's themes, and the settings\nthen and after settingsChanged, and logs the theme
 MainWindow ..> SettingsDialog : opens on a copy\nof the settings
 
 MainWindow *-- DashboardView
@@ -127,8 +132,8 @@ ProcessesView *-- ProcessModel
 ProcessesView *-- ProcessSortFilterProxyModel
 ProcessSortFilterProxyModel o-- ProcessModel : source
 ProcessesView o-- ProcessTerminator
-MainWindow o-- ThemeFiles
-SettingsDialog ..> ThemeFiles : Import..., Export...
+MainWindow o-- ThemeSources
+SettingsDialog ..> ThemeSources : the theme list,\nImport..., Export...
 NetworkView *-- AdapterThroughputHistory
 AdapterThroughputHistory ..> SampleHistory
 DashboardView ..> SampleHistory

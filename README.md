@@ -34,8 +34,8 @@ Built with C++20, Qt 6, and direct Windows APIs for accurate, low-overhead monit
 - **Processes** — Sortable process list with CPU, memory, I/O rate, threads, and handles. Filter by name or PID, or show each process under its parent as a tree. New processes are highlighted, and ended ones are marked before they disappear.
 - **Network view** — Each adapter's type, status, link speed, IPv4 and IPv6 addresses, DNS servers, network name and category, with live send and receive charts. Connectivity level, metered and roaming status update as soon as Windows reports a change. "Show all adapters" also lists the adapters Windows hides.
 - **Process management** — End a process after confirming. Only your own processes that are not elevated can be ended.
-- **Light and dark** — Follows Windows' light or dark mode, also when it changes, or stays light or dark whatever Windows uses. Choose your own colours for each, from the window and the cards to the chart lines and the status colours, in File > Settings > Appearance, and export them to a theme file to share or keep, or import one. Windows' contrast themes keep their own colours.
-- **Settings** — Set the refresh interval (0.5 to 10 seconds), the colour scheme, byte units (KiB or KB), network throughput in bytes or bits per second, the dashboard's cards, and the log level from File > Settings. Changes apply at once and are saved.
+- **Themes** — Follows Windows' light or dark mode, also when it changes, or stays Light or Dark whatever Windows uses, or draws with the Verdandi theme, in the navy and gold of its logo. Change any theme's colours, from the window and the cards to the chart lines and the status colours, in File > Settings > Appearance, and export a theme to a file to share or keep. Importing a theme file adds it to the `themes` folder beside `verdandi.exe` and to the list. Windows' contrast themes keep their own colours.
+- **Settings** — Set the refresh interval (0.5 to 10 seconds), the theme, byte units (KiB or KB), network throughput in bytes or bits per second, the dashboard's cards, and the log level from File > Settings. Changes apply at once and are saved.
 - **Sleep and resume** — After the PC wakes up, rates start again from fresh readings instead of averaging over the time it slept.
 - **One window** — Starting Verdandi while it runs brings its window to the front, restored if it was minimized, instead of opening a second one.
 
@@ -45,7 +45,7 @@ Built with C++20, Qt 6, and direct Windows APIs for accurate, low-overhead monit
 
 Download `Verdandi-<version>-x64.zip` from the [latest release](https://github.com/DunderGG/verdandi/releases/latest), unzip it into a folder you can write to, such as your Desktop or Documents, and run `verdandi.exe`. It needs Windows 10 or 11, 64-bit, and nothing else: no installer, no administrator rights and no runtime to install.
 
-- **Portable:** Verdandi keeps its settings and its log in its own folder, beside `verdandi.exe`, so deleting the folder removes it. To update, unzip the new version into a folder of its own and copy your `settings.json` across.
+- **Portable:** Verdandi keeps its settings and its log in its own folder, beside `verdandi.exe`, so deleting the folder removes it. To update, unzip the new version into a folder of its own and copy your `settings.json` across, and any themes you imported from its `themes` folder.
 - **Windows SmartScreen** may say "Windows protected your PC", because the releases are not code-signed yet. Click **More info**, then **Run anyway**.
 - **Checksums:** each release's `SHA256SUMS.txt` holds the SHA-256 of its zips. Compare them with the output of `Get-FileHash .\Verdandi-<version>-x64.zip` in PowerShell.
 - The release's `-symbols.zip` holds the program database, which is needed only to analyze crash reports.

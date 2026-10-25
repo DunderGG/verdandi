@@ -161,9 +161,9 @@ const domain::Settings& MainWindow::settings() const
     return m_settings;
 }
 
-void MainWindow::setThemeFiles(ThemeFiles files)
+void MainWindow::setThemeSources(ThemeSources sources)
 {
-    m_themeFiles = std::move(files);
+    m_themeSources = std::move(sources);
 }
 
 void MainWindow::showSettingsNotSaved(const QString& path, const QString& reason)
@@ -192,7 +192,7 @@ void MainWindow::openSettingsDialog()
 {
     auto* dialog = new SettingsDialog(m_settings, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    dialog->setThemeFiles(m_themeFiles);
+    dialog->setThemeSources(m_themeSources);
     connect(dialog, &QDialog::accepted, this, [this, dialog] {
         const domain::Settings edited = dialog->settings();
         if (edited != m_settings) {
