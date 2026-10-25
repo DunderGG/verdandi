@@ -5,6 +5,10 @@ add_library(verdandi_ui STATIC
     adapter_card.h
     adapter_throughput_history.cpp
     adapter_throughput_history.h
+    card_frame.cpp
+    card_frame.h
+    color_button.cpp
+    color_button.h
     cpu_performance_page.cpp
     cpu_performance_page.h
     dashboard_formatting.cpp

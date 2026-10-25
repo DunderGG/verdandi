@@ -62,7 +62,9 @@ namespace verdandi::ui
  *
  * The indicators and the rows' highlights take the theme's colours for the
  * application palette's base colour, which the rows are drawn on, each time
- * a view asks, so they follow a change of scheme (DC-150).
+ * a view asks, so they follow a change of scheme (DC-150). When the user's
+ * colours change, the model paints its indicators again and signals every
+ * row's indicator and highlight (DC-151).
  *
  * Not thread-safe; use only on the UI thread.
  */
@@ -194,6 +196,11 @@ private:
     void insertNodes(const std::vector<Node*>& added);
     void signalValuesChanged(const ChangedBlocks& changed);
     void signalHighlightChanged(const Node* node);
+    // Paints the access indicators in the theme's colours for both schemes.
+    void paintDetailsIcons();
+    // Paints the indicators again in the user's new colours, and signals
+    // every row's indicator and highlight.
+    void takeThemeColors();
 
     // Owns every node. m_topLevel and each node's children hold them in row order.
     std::unordered_map<domain::ProcessIdentity, std::unique_ptr<Node>, domain::ProcessIdentityHash> m_nodes;

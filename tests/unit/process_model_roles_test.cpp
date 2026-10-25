@@ -292,6 +292,32 @@ TEST(ProcessModel, Data_AccessIndicator_PaintedForTheSchemeOfTheRows)
     }
 }
 
+TEST(ProcessModel, AccessColourChosen_IndicatorPaintedAgainAndEveryRowSignalled)
+{
+    const ScopedColorScheme light(Qt::ColorScheme::Light);
+    ProcessModel model;
+    model.updateProcesses(
+        {withDetails(1, ProcessDetailsStatus::AccessDenied), withDetails(2, ProcessDetailsStatus::Available)}, kNow);
+    const QModelIndex name = model.index(0, static_cast<int>(Column::Name));
+    const QImage before = iconImage(name.data(Qt::DecorationRole));
+    std::vector<QList<int>> signalledRoles;
+    QObject::connect(
+        &model, &ProcessModel::dataChanged,
+        [&signalledRoles](const QModelIndex& /*topLeft*/, const QModelIndex& bottomRight, const QList<int>& roles) {
+            EXPECT_EQ(bottomRight.row(), 1);
+            signalledRoles.push_back(roles);
+        });
+
+    const ScopedCustomColors chosen(themeWith(ThemeColorRole::AccessDenied, false, {.red = 0xc0, .blue = 0xc0}));
+
+    EXPECT_NE(iconImage(name.data(Qt::DecorationRole)), before);
+    EXPECT_EQ(iconImage(name.data(Qt::DecorationRole)),
+              iconImage(verdandi::ui::detailsStatusIcon(ProcessDetailsStatus::AccessDenied, false)));
+    ASSERT_EQ(signalledRoles.size(), 1u);
+    EXPECT_TRUE(signalledRoles.front().contains(Qt::DecorationRole));
+    EXPECT_TRUE(signalledRoles.front().contains(Qt::BackgroundRole));
+}
+
 TEST(ProcessModel, Data_NameToolTip_GivesDetailsOrWhyMissing)
 {
     ProcessModel model;

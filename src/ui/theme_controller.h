@@ -6,6 +6,7 @@
 #include <QString>
 
 #include "domain/settings.h"
+#include "domain/theme.h"
 
 namespace verdandi::ui
 {
@@ -27,12 +28,19 @@ namespace verdandi::ui
  * scheme. While the scheme is dark, the controller replaces it with Fusion,
  * which draws the dark palette, and makes the palette's window and base
  * colours explicit, so that Fusion draws the widgets with the application's
- * palette rather than the Windows theme's per-class palettes (DC-148). When
- * the scheme turns light, and when the controller is destroyed, it gives the
- * application back its style and palette.
+ * palette rather than the Windows theme's per-class palettes (DC-148).
  *
- * One controller serves the whole application: main.cpp creates it before
- * the main window, so that it outlives every window.
+ * The settings' theme holds the colours that the user chose for each scheme
+ * (DC-151). For the scheme it draws in, the controller sets the palette's
+ * window, base, text and accent colours that the user chose, and gives
+ * ui::theme every chosen colour, which the widgets that draw their own take.
+ * A contrast theme replaces them all. When the scheme changes, it starts
+ * again from the new scheme's palette.
+ *
+ * When it is destroyed, the controller gives the application back Windows'
+ * scheme, its style and its palette, and clears the chosen colours. One
+ * controller serves the whole application: main.cpp creates it before the
+ * main window, so that it outlives every window.
  *
  * Not thread-safe; use only on the UI thread.
  */
@@ -49,9 +57,11 @@ public:
     [[nodiscard]] Qt::ColorScheme colorScheme() const;
 
     /**
-     * Draws the application in the colour scheme that settings choose. Asks
-     * Qt only when the choice differs from the previous settings', since Qt
-     * then gives every widget its style again. Windows' scheme until set.
+     * Draws the application in the colour scheme and the colours that
+     * settings choose. Asks Qt for the scheme only when the choice differs
+     * from the previous settings', since Qt then gives every widget its style
+     * again, and sets the colours only when they differ. Windows' scheme and
+     * the theme's own colours until set.
      */
     void setSettings(const domain::Settings& settings);
 
@@ -61,14 +71,19 @@ signals:
 
 private:
     // Draws the application in scheme: Fusion in place of a style that draws
-    // only light while scheme is dark, and the application's own style otherwise.
+    // only light while scheme is dark, and the application's own style
+    // otherwise, and the colours chosen for scheme.
     void applyColorScheme(Qt::ColorScheme scheme);
-    // Gives the application back the style that Fusion replaced, and its palette.
+    // Gives the application back the style that Fusion replaced.
     void restoreStyle();
+    // Sets the application palette from the scheme's own and the colours
+    // chosen for it, and gives ui::theme the chosen colours.
+    void applyColors();
 
     // The name of the style that Fusion replaces while the scheme is dark; empty while none is replaced.
     QString m_replacedStyle;
     domain::ColorScheme m_colorSchemeSetting{domain::ColorScheme::System};
+    domain::Theme m_theme{};
 };
 
 /**

@@ -301,7 +301,7 @@ Store small user preferences in a JSON settings file. It holds:
 - the refresh interval, from 0.5 to 10 seconds in steps of half a second;
 - the display units: binary (KiB) or decimal (KB) byte units, and network throughput in bytes or bits per second;
 - which dashboard panels are shown;
-- the colour scheme: the one Windows sets, light or dark ([Colour schemes and themes](#colour-schemes-and-themes));
+- the colour scheme: the one Windows sets, light or dark, and the colours chosen for each ([Colour schemes and themes](#colour-schemes-and-themes));
 - the log level.
 
 The dashboard's layout, and alert thresholds and whether alerts are enabled, can join it when those features exist.
@@ -368,6 +368,8 @@ Windows sets a light or a dark colour scheme for applications, or a contrast the
 The settings can keep the light or the dark scheme whatever Windows sets. Before the window is created, and after each change of the settings, `main.cpp` gives them to the controller, which asks Qt for the chosen scheme with `QStyleHints::setColorScheme()`, or for Windows' with `unsetColorScheme()`. Qt then draws in that scheme, palette, controls and title bars, as if Windows had set it. A contrast theme still replaces the chosen scheme ([DC-149](design_decisions.md#dc-149)).
 
 The colours that the widgets draw themselves, where the palette has no role for them, are theme roles (`domain::ThemeColorRole`): the charts' lines and grid, the status text, and the process rows' highlights and access icons. `ui::theme::color()`, in the `verdandi_ui_theme` target that the chart widgets share with the rest of `ui`, gives each a shade for a light and for a dark surface. A widget picks the shade by the colour it is drawn on whenever it paints or its palette changes, so every widget follows a change of scheme ([DC-150](design_decisions.md#dc-150)).
+
+The user can choose any of these colours, and the window, page, card, text and accent colours, for each scheme, in the settings dialog's Appearance tab; the settings hold them as the theme. For the scheme it draws in, `ThemeController` sets the chosen window, base, text and accent colours in the application palette, starting again from the scheme's own palette at every change, and gives `ui::theme` the rest, which `theme::color()` then gives in place of its shades. `theme::ThemeNotifier` tells the widgets that keep a colour, such as `TonedLabel` and the process model's icons, to take it again; the cards (`ui::CardFrame`) paint themselves in the chosen card colour. A contrast theme replaces every chosen colour ([DC-151](design_decisions.md#dc-151)).
 
 Qt's windowsvista style, which Qt picks on Windows 10, draws only the light scheme. While the scheme is dark, the controller replaces it with Fusion, which draws Qt's dark palette, and sets the palette's window and base colours, so that Fusion draws every widget with the application's palette. Each tab's page fills itself with the base colour, and the scroll areas on the pages leave theirs unfilled, so that the pages, which the text colours are checked against, are the same colour in every style ([DC-148](design_decisions.md#dc-148)).
 

@@ -100,6 +100,7 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-148](#dc-148): The dark scheme on Windows 10 is drawn with Fusion, and every page in the palette's base colour
   - [DC-149](#dc-149): A colour scheme setting, Windows' own, light or dark, asked of Qt with `QStyleHints::setColorScheme()`
   - [DC-150](#dc-150): The colours that widgets draw themselves are theme roles, each with a light and a dark shade, picked by the surface they are drawn on whenever they paint
+  - [DC-151](#dc-151): Colours that the user chooses for each scheme: palette roles through the application palette, the others through `ui::theme` and a notifier
 - [Dashboard tab](#dashboard-tab)
   - [DC-45](#dc-45): Health evaluation: domain types, a pure evaluator in `monitoring`, and the result carried in the snapshot
   - [DC-46](#dc-46): Dashboard cards: `ResourceCard` widgets fed by pure formatting helpers
@@ -955,7 +956,7 @@ The rule and its reasons are in [coding_guidelines.md — Text colours](coding_g
 
 ## Colour schemes and themes
 
-The colour scheme that the monitor draws in, and the colours that its widgets draw themselves.
+The colour scheme that the monitor draws in, the colours that its widgets draw themselves, and the colours that the user chooses.
 
 <a id="dc-147"></a>
 ### DC-147: The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
@@ -995,13 +996,26 @@ The colour scheme that the monitor draws in, and the colours that its widgets dr
 <a id="dc-150"></a>
 ### DC-150: The colours that widgets draw themselves are theme roles, each with a light and a dark shade, picked by the surface they are drawn on whenever they paint
 
-**Decision:** Every colour that a widget draws where the palette has no role for it, the charts' five lines and their grid, the status text, the process rows' highlights and the access icons, is a `domain::ThemeColorRole`. `ui::theme::color()` gives each role's shade for a light or a dark surface, from one table in a target of its own, `verdandi_ui_theme`, which the chart widgets and the rest of `ui` link. A widget picks the shade by the lightness of the colour it is drawn on, whenever it paints or its palette changes; the process model asks with the application palette's base colour each time a view asks for data. Icons, which are painted once, are painted for both and chosen the same way. On a light surface the access padlock takes the Warning amber.
+**Decision:** Every colour that a widget draws where the palette has no role for it, the charts' five lines and their grid, the status text, the process rows' highlights and the access icons, is a `domain::ThemeColorRole`. `ui::theme::color()` gives each role's shade for a light or a dark surface, or the user's colour ([DC-151](#dc-151)), from one table in a target of its own, `verdandi_ui_theme`, which the chart widgets and the rest of `ui` link. A widget picks the shade by the lightness of the colour it is drawn on, whenever it paints or its palette changes; the process model asks with the application palette's base colour each time a view asks for data. Icons, which are painted once, are painted for both and chosen the same way. On a light surface the access padlock takes the Warning amber.
 
 **Rationale:** The colours were constants in four files. One table names each by what it colours, so a change to them, or a new consumer, has one place to go, and the contrast rules are tested once for all of them. The chart widgets may not depend on the rest of `ui`, so the table sits in a target below both. The roles are domain values, free of Qt, as the health levels are. Picking by lightness when painting follows a change of scheme without an event of its own, and suits any surface, a card or a page, in any style. The padlock's amber reached 2.9:1 on white, below WCAG's 3:1 for graphics, and one colour drawn once for both schemes cannot reach it on both.
 
 **Consequences:** A new colour that a widget draws itself is a new role with two shades, and a contrast test if it is text or a graphic.
 
-**History:** Dark mode and theme support, sparklines and custom widgets that follow the theme.
+**History:** Dark mode and theme support, sparklines and custom widgets that follow the theme; Dark mode and theme support (the user's colours first).
+
+---
+
+<a id="dc-151"></a>
+### DC-151: Colours that the user chooses for each scheme: palette roles through the application palette, the others through `ui::theme` and a notifier
+
+**Decision:** `domain::Settings::theme` holds, for the light and for the dark scheme, an optional colour for each `domain::ThemeColorRole`, whose roles now include the window, the pages, the cards, the text and the accent. The settings file writes each chosen colour as "#rrggbb" under its role's name. `ui::ThemeController` sets the drawn scheme's chosen window, base, text and accent colours as roles of the application palette, starting again from the scheme's own palette each time, and then gives every chosen colour to `ui::theme`, whose `color()` takes it before the built-in shade, keeping that shade's opacity. `theme::ThemeNotifier`, which the application owns, tells the widgets that keep a colour. Cards are `ui::CardFrame`s, which paint themselves in the chosen card colour or the page's. A contrast theme replaces every chosen colour. The settings dialog's Appearance tab has a button for each role in each scheme.
+
+**Rationale:** A colour chosen for dark pages suits no light ones, and the schemes switch with Windows, so each scheme has its own. A role left unchosen keeps Windows' colour, such as its accent, or the monitor's. Qt's styles and widgets draw from the application palette, so that is where the palette's roles go; starting from the scheme's palette returns an unchosen role to Windows' colour. The other colours are drawn by the monitor's widgets where they paint, so a process-wide value and a signal suffice, like the application palette, rather than handing them through every view, and the chart widgets may not depend on the rest of `ui`. Cards painted by the monitor look the same in every style, where Fusion would leave them unfilled. Keeping the opacity leaves the highlights tints.
+
+**Consequences:** The monitor does not check a chosen colour's contrast, so text can become unreadable on a chosen page or card. The windows11 style still draws some parts, such as button fills and frames, in its own colours for the scheme.
+
+**History:** Dark mode and theme support, colours that the user chooses.
 
 ---
 
@@ -1286,24 +1300,24 @@ The settings file and the settings dialog: what the file holds, how it is read a
 <a id="dc-123"></a>
 ### DC-123: Settings: one JSON file, read one setting at a time, with its types in `domain`
 
-**Decision:** `domain::Settings` holds the refresh interval, the display units, the dashboard panels shown, the colour scheme ([DC-149](#dc-149)) and the log level, and its defaults are what the monitor does without a file. `verdandi_persistence` (the standard library and nlohmann/json only) writes it as JSON with a `version`, enumerations by name and the panels as booleans. It reads one setting at a time: a missing setting keeps its default, a refresh interval takes the nearest multiple of 0.5 s from 0.5 to 10 s (`domain::nearestRefreshInterval()`), and any other invalid value or unknown key keeps the default and is returned as a problem. A save writes a temporary file, which then replaces the file.
+**Decision:** `domain::Settings` holds the refresh interval, the display units, the dashboard panels shown, the colour scheme ([DC-149](#dc-149)), the colours chosen for each scheme ([DC-151](#dc-151)) and the log level, and its defaults are what the monitor does without a file. `verdandi_persistence` (the standard library and nlohmann/json only) writes it as JSON with a `version`, enumerations by name, the panels as booleans and colours as "#rrggbb". It reads one setting at a time: a missing setting keeps its default, a refresh interval takes the nearest multiple of 0.5 s from 0.5 to 10 s (`domain::nearestRefreshInterval()`), and any other invalid value or unknown key keeps the default and is returned as a problem. A save writes a temporary file, which then replaces the file.
 
 **Rationale:** The types are in `domain` because `ui`, which depends only on `domain` ([DC-20](#dc-20)), edits them and applies the units and panels. Problems are returned rather than logged, because the log level is read from the file before the logger is configured. Reading each setting alone means that a typing mistake costs one setting, not all, and booleans rather than a list of the panels shown keep a panel added later shown in an older file. Binary and decimal byte units are unambiguous; Windows' 1,024-byte "KB" is not. The limits are Task Manager's fastest update speed and Process Explorer's slowest; half-second steps reach every preset of both and keep each chart window a whole number of seconds, so its label is exact ([DC-61](#dc-61)). A save that fails cannot leave a truncated file, which would reset every setting. Without exceptions, nlohmann/json's `parse()` says only that the text is not valid, so a SAX handler finds where.
 
 **Consequences:** A save drops the keys this version does not know, such as a newer version's settings. Comments are rejected rather than read, because a save would drop them. A save is not flushed to disk before the rename, since the standard library cannot flush a file and `persistence` calls no Windows API, so a power loss just after a save can leave an empty file, and the monitor then starts with the defaults until a setting changes; the settings cost little to lose.
 
-**History:** Phase 6, settings file; Phase 6, settings at startup (the interval in half-second steps); Phase 6 code review (a save is not flushed to disk); Dark mode and theme support (the colour scheme).
+**History:** Phase 6, settings file; Phase 6, settings at startup (the interval in half-second steps); Phase 6 code review (a save is not flushed to disk); Dark mode and theme support (the colour scheme, and the chosen colours).
 
 ---
 
 <a id="dc-124"></a>
 ### DC-124: Settings dialog: a window-modal `QDialog` from the File menu, which edits a copy and changes nothing until OK
 
-**Decision:** The main window's File menu has Settings... and Exit. Settings... opens a window-modal `SettingsDialog` on a copy of the window's settings, with OK, Cancel and Restore Defaults, which resets the controls without closing it. Only OK changes anything: if the dialog's settings differ from the window's, the window keeps them, applies what its views show of them as `setSettings()` does, and emits `settingsChanged()`, for the receiver to save them and apply the rest. The refresh interval is a spin box in seconds, with a decimal point whatever the locale, as [DC-57](#dc-57)'s numbers are, in the half-second steps of [DC-123](#dc-123): a value typed between two steps moves to the nearer one when editing ends, and OK saves that step.
+**Decision:** The main window's File menu has Settings... and Exit. Settings... opens a window-modal `SettingsDialog` on a copy of the window's settings, with OK, Cancel and Restore Defaults, which resets the controls without closing it. Its General tab holds the interval, the log level, the units and the dashboard's cards, and its Appearance tab the colour scheme and the chosen colours, in a list that scrolls ([DC-151](#dc-151)). Only OK changes anything: if the dialog's settings differ from the window's, the window keeps them, applies what its views show of them as `setSettings()` does, and emits `settingsChanged()`, for the receiver to save them and apply the rest. The refresh interval is a spin box in seconds, with a decimal point whatever the locale, as [DC-57](#dc-57)'s numbers are, in the half-second steps of [DC-123](#dc-123): a value typed between two steps moves to the nearer one when editing ends, and OK saves that step.
 
 **Rationale:** OK and Cancel let the user try values and back out, as Windows' dialogs do; applying each control at once would save the file at every step of the spin box. Windows programs keep their settings in a menu bar, whose File menu will also hold the roadmap's "Run new task", as Task Manager's does. The window emits the settings rather than saving them, because `ui` may not depend on `persistence` ([DC-20](#dc-20)), and the scheduler and the logger are not the UI's to set; what the views show is, so the window applies it without a round trip through `app`. A spin box reaches all twenty intervals the file allows, where a list of presets such as Process Explorer's would leave out those between them. Moving a typed value to its step when editing ends shows the user what OK will save, rather than changing it silently. Emitting only on a change keeps an OK that changed nothing from saving the file.
 
-**History:** Phase 6, settings dialog; Phase 6, settings at startup (the window applies what its views show; the interval in half-second steps).
+**History:** Phase 6, settings dialog; Phase 6, settings at startup (the window applies what its views show; the interval in half-second steps); Dark mode and theme support (the General and Appearance tabs).
 
 ---
 

@@ -43,8 +43,8 @@ inline constexpr qreal kDimmedTextAlpha = 0.6;
 /**
  * A label drawn in the colour of its tone (see textToneColor()), and in bold
  * for Good, Warning and Critical. It works the colour out from the text and
- * window colours it inherits, and again whenever its palette changes, so it
- * follows a change of colour scheme.
+ * background colours it inherits, and again whenever its palette or the
+ * user's theme colours change, so it follows a change of colour scheme.
  *
  * Not thread-safe; use only on the UI thread.
  */

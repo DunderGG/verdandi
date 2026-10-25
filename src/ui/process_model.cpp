@@ -177,11 +177,9 @@ QString headerToolTip(Column column)
 
 ProcessModel::ProcessModel(QObject* parent) : QAbstractItemModel(parent)
 {
-    for (std::size_t status = 0; status < domain::kProcessDetailsStatusCount; ++status) {
-        const auto detailsStatus = static_cast<domain::ProcessDetailsStatus>(status);
-        m_lightDetailsIcons[status] = detailsStatusIcon(detailsStatus, false);
-        m_darkDetailsIcons[status] = detailsStatusIcon(detailsStatus, true);
-    }
+    paintDetailsIcons();
+    connect(theme::ThemeNotifier::instance(), &theme::ThemeNotifier::colorsChanged, this,
+            &ProcessModel::takeThemeColors);
 }
 
 void ProcessModel::updateProcesses(const std::vector<domain::ProcessInfo>& processes,
@@ -614,6 +612,36 @@ void ProcessModel::insertNodes(const std::vector<Node*>& added)
                 ready.push_back(node);
             }
         }
+    }
+}
+
+void ProcessModel::paintDetailsIcons()
+{
+    for (std::size_t status = 0; status < domain::kProcessDetailsStatusCount; ++status) {
+        const auto detailsStatus = static_cast<domain::ProcessDetailsStatus>(status);
+        m_lightDetailsIcons[status] = detailsStatusIcon(detailsStatus, false);
+        m_darkDetailsIcons[status] = detailsStatusIcon(detailsStatus, true);
+    }
+}
+
+void ProcessModel::takeThemeColors()
+{
+    paintDetailsIcons();
+
+    // Every row's icon and highlight take the user's new colours, and nothing
+    // else changes, so a sorted view keeps its order.
+    static const QList<int> kThemeRoles{Qt::DecorationRole, Qt::BackgroundRole};
+    const auto signalRows = [this](const Node* parent, std::size_t rowCount) {
+        if (rowCount == 0) {
+            return;
+        }
+        const QModelIndex parentIndex = indexOfNode(parent);
+        emit dataChanged(index(0, 0, parentIndex), index(static_cast<int>(rowCount) - 1, kColumnCount - 1, parentIndex),
+                         kThemeRoles);
+    };
+    signalRows(nullptr, m_topLevel.size());
+    for (const auto& [identity, node] : m_nodes) {
+        signalRows(node.get(), node->children.size());
     }
 }
 

@@ -293,6 +293,9 @@ SparklineWidget::SparklineWidget(QWidget* parent) : QWidget(parent), m_series(1)
 {
     m_series.front().filled = true;
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    // The theme's colours are taken when painting, so a change needs only a repaint.
+    connect(theme::ThemeNotifier::instance(), &theme::ThemeNotifier::colorsChanged, this,
+            qOverload<>(&QWidget::update));
 }
 
 void SparklineWidget::setSamples(std::span<const std::optional<float>> samples)

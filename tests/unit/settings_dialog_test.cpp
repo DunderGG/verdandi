@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -10,14 +11,19 @@
 #include <QPoint>
 #include <QPushButton>
 #include <QString>
+#include <QTabWidget>
 
 #include "domain/settings.h"
+#include "domain/theme.h"
 #include "support/settings_samples.h"
+#include "ui/color_button.h"
 #include "ui/settings_dialog.h"
+#include "ui/theme/theme_colors.h"
 
 using namespace verdandi::domain;
 using std::chrono::milliseconds;
 using verdandi::tests::nonDefaultSettings;
+using verdandi::ui::ColorButton;
 using verdandi::ui::SettingsDialog;
 
 namespace
@@ -56,6 +62,10 @@ TEST(SettingsDialog, Construction_ControlsShowTheSettings)
     EXPECT_FALSE(dialog.diskPanelCheckBox()->isChecked());
     EXPECT_FALSE(dialog.networkPanelCheckBox()->isChecked());
     EXPECT_FALSE(dialog.uptimePanelCheckBox()->isChecked());
+    EXPECT_EQ(dialog.colorButton(ThemeColorRole::Page, false)->color(), QColor(0xf0, 0xf0, 0xf0));
+    EXPECT_EQ(dialog.colorButton(ThemeColorRole::Card, true)->color(), QColor(0x20, 0x20, 0x20));
+    EXPECT_FALSE(dialog.colorButton(ThemeColorRole::Page, true)->color().has_value());
+    EXPECT_FALSE(dialog.colorButton(ThemeColorRole::Card, false)->color().has_value());
 }
 
 TEST(SettingsDialog, ControlsEdited_SettingsReturnsWhatTheyShow)
@@ -72,8 +82,40 @@ TEST(SettingsDialog, ControlsEdited_SettingsReturnsWhatTheyShow)
     dialog.diskPanelCheckBox()->setChecked(false);
     dialog.networkPanelCheckBox()->setChecked(false);
     dialog.uptimePanelCheckBox()->setChecked(false);
+    dialog.colorButton(ThemeColorRole::Page, false)->setColor(QColor(0xf0, 0xf0, 0xf0));
+    dialog.colorButton(ThemeColorRole::Card, true)->setColor(QColor(0x20, 0x20, 0x20));
 
     EXPECT_EQ(dialog.settings(), nonDefaultSettings());
+}
+
+TEST(SettingsDialog, ColorButtons_OnTheAppearanceTabWithTheDefaultsOfTheirScheme)
+{
+    const SettingsDialog dialog(Settings{});
+    const QWidget* appearance = dialog.tabWidget()->widget(1);
+
+    EXPECT_EQ(dialog.tabWidget()->tabText(1), "Appearance");
+    EXPECT_TRUE(appearance->isAncestorOf(dialog.colorSchemeComboBox()));
+    for (std::size_t index = 0; index < kThemeColorRoleCount; ++index) {
+        const auto role = static_cast<ThemeColorRole>(index);
+        SCOPED_TRACE(index);
+        for (const bool isDark : {false, true}) {
+            const ColorButton* button = dialog.colorButton(role, isDark);
+            ASSERT_NE(button, nullptr);
+            EXPECT_TRUE(appearance->isAncestorOf(button));
+            EXPECT_EQ(button->defaultColor(), verdandi::ui::theme::defaultColor(role, isDark));
+        }
+    }
+}
+
+TEST(SettingsDialog, ResetColours_EveryColourToItsDefaultAndTheRestAsShown)
+{
+    SettingsDialog dialog(nonDefaultSettings());
+    Settings expected = nonDefaultSettings();
+    expected.theme = Theme{};
+
+    dialog.resetColorsButton()->click();
+
+    EXPECT_EQ(dialog.settings(), expected);
 }
 
 TEST(SettingsDialog, SetSettings_EachLogLevelColorSchemeAndUnit_SettingsReturnsIt)

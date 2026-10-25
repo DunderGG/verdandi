@@ -27,9 +27,8 @@ constexpr int kChartHeight = 110;
 
 } // namespace
 
-AdapterCard::AdapterCard(std::size_t chartCapacity, QWidget* parent) : QFrame(parent)
+AdapterCard::AdapterCard(std::size_t chartCapacity, QWidget* parent) : CardFrame(parent)
 {
-    setFrameShape(QFrame::StyledPanel);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(kCardMargins);

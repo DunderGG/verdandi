@@ -16,6 +16,7 @@
 #include <QWidget>
 
 #include "domain/theme.h"
+#include "support/appearance.h"
 #include "support/sparkline_samples.h"
 #include "ui/charts/sparkline_widget.h"
 #include "ui/theme/theme_colors.h"
@@ -249,6 +250,23 @@ TEST(SparklineWidget, SurfaceTurnsDark_SeriesAndGridTakeTheThemesDarkShades)
 
     EXPECT_EQ(widget->seriesColor(1), defaultSeriesColor(1, true));
     EXPECT_EQ(widget->gridColor(), verdandi::ui::theme::color(ThemeColorRole::ChartGrid, true));
+}
+
+TEST(SparklineWidget, LineAndGridColoursChosen_TakenFromTheTheme)
+{
+    QWidget parent;
+    QPalette palette;
+    palette.setColor(QPalette::Window, QColor(0xff, 0xff, 0xff));
+    parent.setPalette(palette);
+    auto* widget = new SparklineWidget(&parent);
+    verdandi::domain::Theme theme;
+    theme.light[ThemeColorRole::ChartLine1] = verdandi::domain::RgbColor{.red = 0x12, .green = 0x34, .blue = 0x56};
+    theme.light[ThemeColorRole::ChartGrid] = verdandi::domain::RgbColor{.red = 0x65, .green = 0x43, .blue = 0x21};
+
+    const verdandi::tests::ScopedCustomColors chosen(theme);
+
+    EXPECT_EQ(widget->seriesColor(0), QColor(0x12, 0x34, 0x56));
+    EXPECT_EQ(widget->gridColor().rgb(), QColor(0x65, 0x43, 0x21).rgb());
 }
 
 TEST(SparklineWidget, ValueFormatter_UsedForLabels)

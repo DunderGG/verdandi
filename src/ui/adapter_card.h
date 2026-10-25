@@ -6,13 +6,13 @@
 #include <optional>
 #include <vector>
 
-#include <QFrame>
 #include <QString>
 
 #include "domain/network_profile.h"
 #include "domain/network_sample.h"
 #include "domain/settings.h"
 #include "ui/adapter_throughput_history.h"
+#include "ui/card_frame.h"
 
 class QLabel;
 
@@ -40,7 +40,7 @@ class SparklineWidget;
  *
  * Not thread-safe; use only on the UI thread.
  */
-class AdapterCard : public QFrame
+class AdapterCard : public CardFrame
 {
     Q_OBJECT
 

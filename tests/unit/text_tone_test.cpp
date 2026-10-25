@@ -6,6 +6,7 @@
 #include <QWidget>
 
 #include "domain/theme.h"
+#include "support/appearance.h"
 #include "support/text_contrast.h"
 #include "ui/text_tone.h"
 #include "ui/theme/theme_colors.h"
@@ -111,6 +112,18 @@ TEST(TonedLabel, ParentPaletteChanges_ColourFollowsTheNewScheme)
 
     EXPECT_EQ(drawnColor(*good), textToneColor(TextTone::Good, kDarkScheme.text, kDarkScheme.window));
     EXPECT_EQ(drawnColor(*dimmed), dimmedTextColor(kDarkScheme.text));
+}
+
+TEST(TonedLabel, StatusColourChosen_TakenAtOnce)
+{
+    QWidget parent;
+    parent.setPalette(paletteOf(kLightScheme));
+    auto* label = new TonedLabel(TextTone::Good, &parent);
+
+    const verdandi::tests::ScopedCustomColors chosen(
+        verdandi::tests::themeWith(ThemeColorRole::Good, false, {.red = 0x12, .green = 0x34, .blue = 0x56}));
+
+    EXPECT_EQ(drawnColor(*label), QColor(0x12, 0x34, 0x56));
 }
 
 TEST(TonedLabel, SetTone_ChangesTheColour)

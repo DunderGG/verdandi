@@ -15,19 +15,31 @@
 #include <QStyleHints>
 
 #include "domain/settings.h"
+#include "domain/theme.h"
 #include "support/appearance.h"
+#include "ui/theme/theme_colors.h"
 #include "ui/theme_controller.h"
 
 using verdandi::domain::ColorScheme;
 using verdandi::domain::LogLevel;
+using verdandi::domain::RgbColor;
 using verdandi::domain::Settings;
+using verdandi::domain::Theme;
+using verdandi::domain::ThemeColorRole;
 using verdandi::tests::ScopedColorScheme;
 using verdandi::tests::ScopedStyle;
 using verdandi::ui::colorSchemeName;
 using verdandi::ui::ThemeController;
+using verdandi::ui::theme::toQColor;
 
 namespace
 {
+
+constexpr RgbColor kWindow{.red = 0xe0, .green = 0xe8, .blue = 0xf0};
+constexpr RgbColor kDarkWindow{.red = 0x10, .green = 0x18, .blue = 0x20};
+constexpr RgbColor kPage{.red = 0xf8, .green = 0xf8, .blue = 0xf0};
+constexpr RgbColor kText{.red = 0x20, .green = 0x30, .blue = 0x40};
+constexpr RgbColor kAccent{.red = 0x80, .green = 0x20, .blue = 0x90};
 
 bool isStyle(const char* name)
 {
@@ -231,6 +243,88 @@ TEST(ThemeController, DestroyedAfterChoosingAScheme_GivesBackWindowsScheme)
     }
 
     EXPECT_EQ(drawnScheme(), windows);
+}
+
+TEST(ThemeController, SetSettings_ChosenColours_PaletteRolesAndTheThemeOfTheDrawnScheme)
+{
+    const ScopedColorScheme light(Qt::ColorScheme::Light);
+    ThemeController controller;
+    Settings settings;
+    settings.theme.light[ThemeColorRole::Window] = kWindow;
+    settings.theme.light[ThemeColorRole::Page] = kPage;
+    settings.theme.light[ThemeColorRole::Text] = kText;
+    settings.theme.light[ThemeColorRole::Accent] = kAccent;
+    settings.theme.dark[ThemeColorRole::Window] = kDarkWindow;
+
+    controller.setSettings(settings);
+
+    const QPalette palette = QApplication::palette();
+    EXPECT_EQ(palette.color(QPalette::Window), toQColor(kWindow));
+    EXPECT_EQ(palette.color(QPalette::Base), toQColor(kPage));
+    EXPECT_EQ(palette.color(QPalette::Active, QPalette::WindowText), toQColor(kText));
+    EXPECT_EQ(palette.color(QPalette::Active, QPalette::Text), toQColor(kText));
+    EXPECT_EQ(palette.color(QPalette::Active, QPalette::Accent), toQColor(kAccent));
+    EXPECT_EQ(palette.color(QPalette::Active, QPalette::Highlight), toQColor(kAccent));
+    EXPECT_EQ(verdandi::ui::theme::customColors(), settings.theme);
+}
+
+TEST(ThemeController, SchemeChanges_TheNewSchemesChosenColours)
+{
+    const ScopedColorScheme light(Qt::ColorScheme::Light);
+    ThemeController controller;
+    Settings settings;
+    settings.theme.light[ThemeColorRole::Window] = kWindow;
+    settings.theme.dark[ThemeColorRole::Window] = kDarkWindow;
+    controller.setSettings(settings);
+    ASSERT_EQ(QApplication::palette().color(QPalette::Window), toQColor(kWindow));
+
+    QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+
+    EXPECT_EQ(QApplication::palette().color(QPalette::Window), toQColor(kDarkWindow));
+}
+
+TEST(ThemeController, SetSettings_ColoursNoLongerChosen_TheSchemesOwnPalette)
+{
+    const ScopedColorScheme light(Qt::ColorScheme::Light);
+    ThemeController controller;
+    const QColor ownWindow = QApplication::palette().color(QPalette::Window);
+    Settings settings;
+    settings.theme.light[ThemeColorRole::Window] = kWindow;
+    controller.setSettings(settings);
+
+    controller.setSettings(Settings{});
+
+    EXPECT_EQ(QApplication::palette().color(QPalette::Window), ownWindow);
+    EXPECT_FALSE(QCoreApplication::testAttribute(Qt::AA_SetPalette));
+    EXPECT_EQ(verdandi::ui::theme::customColors(), Theme{});
+}
+
+TEST(ThemeController, ChosenTextWithFusion_FusionsDarkSurfacesKept)
+{
+    const ScopedStyle vista("windowsvista");
+    const ScopedColorScheme dark(Qt::ColorScheme::Dark);
+    ThemeController controller;
+    const QColor fusionBase = QApplication::palette().color(QPalette::Base);
+    Settings settings;
+    settings.theme.dark[ThemeColorRole::Text] = kText;
+
+    controller.setSettings(settings);
+
+    EXPECT_TRUE(isStyle("fusion"));
+    EXPECT_EQ(QApplication::palette().color(QPalette::Base), fusionBase);
+    EXPECT_EQ(QApplication::palette().color(QPalette::Active, QPalette::WindowText), toQColor(kText));
+}
+
+TEST(ThemeController, Destroyed_ClearsTheChosenColours)
+{
+    {
+        ThemeController controller;
+        controller.setSettings(Settings{.theme = verdandi::tests::themeWith(ThemeColorRole::Good, false, kPage)});
+        ASSERT_NE(verdandi::ui::theme::customColors(), Theme{});
+    }
+
+    EXPECT_EQ(verdandi::ui::theme::customColors(), Theme{});
+    EXPECT_FALSE(QCoreApplication::testAttribute(Qt::AA_SetPalette));
 }
 
 TEST(ThemeController, ColorSchemeName_EachScheme)

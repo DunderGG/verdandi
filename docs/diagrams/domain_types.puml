@@ -111,7 +111,25 @@ package "domain" $DOMAIN_COLOR {
         displayUnits : DisplayUnits
         dashboardPanels : DashboardPanels
         colorScheme : ColorScheme
+        theme : Theme
         logLevel : LogLevel
+    }
+
+    struct Theme {
+        light : ThemeColors
+        dark : ThemeColors
+    }
+
+    struct ThemeColors {
+        colors : optional<RgbColor> for each ThemeColorRole
+    }
+
+    enum ThemeColorRole {
+        Window, Page, Card, Text, Accent
+        ChartLine1 … ChartLine5, ChartGrid
+        Good, Warning, Critical
+        ProcessStarted, ProcessExited
+        AccessDenied, AccessNeverOpened, AccessUnavailable
     }
 
     enum ProcessTerminationResult {
@@ -143,6 +161,9 @@ SystemSnapshot *-- SystemActivitySample
 ConnectivityStatus *-- ConnectivityLevel
 SystemHealth *-- HealthLevel
 ProcessInfo ..> ProcessIdentity : identity()
+Settings *-- Theme
+Theme *-- "2" ThemeColors
+ThemeColors ..> ThemeColorRole : indexed by
 
 legend bottom left
     * **SystemSnapshot** is a value, copied from the tick thread to the UI thread. An optional
@@ -151,8 +172,8 @@ legend bottom left
     * **ProcessIdentity**: a process is its PID and creation time, never its PID alone,
       because Windows reuses PIDs.
     * **RingBuffer<T>** holds the fixed-capacity histories of the charts and sparklines.
-    * **Settings** are what the settings file holds, and **ProcessTerminationResult** says
-      what ending a process did.
+    * **Settings** are what the settings file holds, with the **Theme**'s colours that the user
+      chose for each colour scheme, and **ProcessTerminationResult** says what ending a process did.
 end legend
 
 @enduml

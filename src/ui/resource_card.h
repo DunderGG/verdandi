@@ -2,10 +2,10 @@
 
 #include <optional>
 
-#include <QFrame>
 #include <QString>
 
 #include "domain/health_status.h"
+#include "ui/card_frame.h"
 
 class QLabel;
 
@@ -21,7 +21,7 @@ class TonedLabel;
  *
  * Not thread-safe; use only on the UI thread.
  */
-class ResourceCard : public QFrame
+class ResourceCard : public CardFrame
 {
     Q_OBJECT
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +12,7 @@
 #include <ios>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <system_error>
 #include <utility>
 
@@ -32,6 +34,9 @@ constexpr std::string_view kBytesKey = "bytes";
 constexpr std::string_view kNetworkRatesKey = "networkRates";
 constexpr std::string_view kDashboardPanelsKey = "dashboardPanels";
 constexpr std::string_view kColorSchemeKey = "colorScheme";
+constexpr std::string_view kThemeKey = "theme";
+constexpr std::string_view kLightColorsKey = "light";
+constexpr std::string_view kDarkColorsKey = "dark";
 constexpr std::string_view kLogLevelKey = "logLevel";
 
 // Appended to the settings file's name for the file that a save writes first.
@@ -59,6 +64,34 @@ constexpr std::array kColorSchemeNames{
     NamedValue<domain::ColorScheme>{"light", domain::ColorScheme::Light},
     NamedValue<domain::ColorScheme>{"dark", domain::ColorScheme::Dark},
 };
+
+// A theme colour's key in the colours of a scheme, which name the role.
+constexpr std::array kThemeColorRoleNames{
+    NamedValue<domain::ThemeColorRole>{"window", domain::ThemeColorRole::Window},
+    NamedValue<domain::ThemeColorRole>{"page", domain::ThemeColorRole::Page},
+    NamedValue<domain::ThemeColorRole>{"card", domain::ThemeColorRole::Card},
+    NamedValue<domain::ThemeColorRole>{"text", domain::ThemeColorRole::Text},
+    NamedValue<domain::ThemeColorRole>{"accent", domain::ThemeColorRole::Accent},
+    NamedValue<domain::ThemeColorRole>{"chartLine1", domain::ThemeColorRole::ChartLine1},
+    NamedValue<domain::ThemeColorRole>{"chartLine2", domain::ThemeColorRole::ChartLine2},
+    NamedValue<domain::ThemeColorRole>{"chartLine3", domain::ThemeColorRole::ChartLine3},
+    NamedValue<domain::ThemeColorRole>{"chartLine4", domain::ThemeColorRole::ChartLine4},
+    NamedValue<domain::ThemeColorRole>{"chartLine5", domain::ThemeColorRole::ChartLine5},
+    NamedValue<domain::ThemeColorRole>{"chartGrid", domain::ThemeColorRole::ChartGrid},
+    NamedValue<domain::ThemeColorRole>{"good", domain::ThemeColorRole::Good},
+    NamedValue<domain::ThemeColorRole>{"warning", domain::ThemeColorRole::Warning},
+    NamedValue<domain::ThemeColorRole>{"critical", domain::ThemeColorRole::Critical},
+    NamedValue<domain::ThemeColorRole>{"processStarted", domain::ThemeColorRole::ProcessStarted},
+    NamedValue<domain::ThemeColorRole>{"processExited", domain::ThemeColorRole::ProcessExited},
+    NamedValue<domain::ThemeColorRole>{"accessDenied", domain::ThemeColorRole::AccessDenied},
+    NamedValue<domain::ThemeColorRole>{"accessNeverOpened", domain::ThemeColorRole::AccessNeverOpened},
+    NamedValue<domain::ThemeColorRole>{"accessUnavailable", domain::ThemeColorRole::AccessUnavailable},
+};
+static_assert(kThemeColorRoleNames.size() == domain::kThemeColorRoleCount, "every theme colour role has a name");
+
+// A colour as the settings file writes it: "#" and two lowercase hexadecimal digits per channel.
+constexpr std::size_t kColorTextLength = 7;
+constexpr int kHexadecimal = 16;
 
 // The levels' names, which the --log-level option gives them too.
 constexpr auto kLogLevelNames = [] {
@@ -226,6 +259,86 @@ void readDashboardPanels(const json& value, domain::DashboardPanels& panels, std
                 });
 }
 
+std::string colorText(domain::RgbColor color)
+{
+    return std::format("#{:02x}{:02x}{:02x}", color.red, color.green, color.blue);
+}
+
+// Reads a colour written as "#rrggbb", in either case, or returns std::nullopt.
+std::optional<domain::RgbColor> parseColor(std::string_view text)
+{
+    if (text.size() != kColorTextLength || text.front() != '#') {
+        return std::nullopt;
+    }
+    std::array<std::uint8_t, 3> channels{};
+    for (std::size_t channel = 0; channel < channels.size(); ++channel) {
+        const char* first = text.data() + 1 + 2 * channel;
+        const char* last = first + 2;
+        const auto [end, error] = std::from_chars(first, last, channels[channel], kHexadecimal);
+        if (error != std::errc{} || end != last) {
+            return std::nullopt;
+        }
+    }
+    return domain::RgbColor{.red = channels[0], .green = channels[1], .blue = channels[2]};
+}
+
+ordered_json themeColorsDocument(const domain::ThemeColors& colors)
+{
+    ordered_json document = ordered_json::object();
+    for (const auto& [name, role] : kThemeColorRoleNames) {
+        if (const auto& color = colors[role]) {
+            document[name] = colorText(*color);
+        }
+    }
+    return document;
+}
+
+ordered_json themeDocument(const domain::Theme& theme)
+{
+    ordered_json document = ordered_json::object();
+    document[kLightColorsKey] = themeColorsDocument(theme.light);
+    document[kDarkColorsKey] = themeColorsDocument(theme.dark);
+    return document;
+}
+
+// Reads the colours chosen for one scheme, at key, such as "theme.dark".
+void readThemeColors(const json& value, std::string_view key, domain::ThemeColors& colors,
+                     std::vector<SettingsProblem>& problems)
+{
+    readMembers(value, key, problems,
+                [&colors, &problems](const std::string& path, const std::string& roleKey, const json& member) {
+                    const auto entry = std::ranges::find(kThemeColorRoleNames, std::string_view{roleKey},
+                                                         &NamedValue<domain::ThemeColorRole>::name);
+                    if (entry == kThemeColorRoleNames.end()) {
+                        reportUnknownKey(problems, path);
+                        return;
+                    }
+                    const std::optional<domain::RgbColor> color =
+                        member.is_string() ? parseColor(member.get_ref<const std::string&>()) : std::nullopt;
+                    if (!color) {
+                        report(problems, path,
+                               std::format("{} is {}, not a colour written as #rrggbb; using the default colour", path,
+                                           describe(member)));
+                        return;
+                    }
+                    colors[entry->value] = *color;
+                });
+}
+
+void readTheme(const json& value, domain::Theme& theme, std::vector<SettingsProblem>& problems)
+{
+    readMembers(value, kThemeKey, problems,
+                [&theme, &problems](const std::string& path, const std::string& key, const json& member) {
+                    if (key == kLightColorsKey) {
+                        readThemeColors(member, path, theme.light, problems);
+                    } else if (key == kDarkColorsKey) {
+                        readThemeColors(member, path, theme.dark, problems);
+                    } else {
+                        reportUnknownKey(problems, path);
+                    }
+                });
+}
+
 // A SAX handler that accepts every value and keeps the parser's message for
 // the first syntax error, which says where it is. json::parse() without
 // exceptions says only that the text is not valid, so parseSettings() runs
@@ -345,6 +458,7 @@ std::string serializeSettings(const domain::Settings& settings)
     document[kDisplayUnitsKey] = std::move(displayUnits);
     document[kDashboardPanelsKey] = std::move(dashboardPanels);
     document[kColorSchemeKey] = nameOf(settings.colorScheme, kColorSchemeNames);
+    document[kThemeKey] = themeDocument(settings.theme);
     document[kLogLevelKey] = nameOf(settings.logLevel, kLogLevelNames);
     return document.dump(4) + "\n";
 }
@@ -373,6 +487,8 @@ SettingsReadResult parseSettings(std::string_view text)
             readDashboardPanels(value, settings.dashboardPanels, result.problems);
         } else if (key == kColorSchemeKey) {
             readName(value, kColorSchemeKey, kColorSchemeNames, settings.colorScheme, result.problems);
+        } else if (key == kThemeKey) {
+            readTheme(value, settings.theme, result.problems);
         } else if (key == kLogLevelKey) {
             readName(value, kLogLevelKey, kLogLevelNames, settings.logLevel, result.problems);
         } else {

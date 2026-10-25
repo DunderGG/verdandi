@@ -9,10 +9,13 @@
 #include <QStyle>
 #include <QStyleHints>
 
+#include "domain/theme.h"
+#include "ui/theme/theme_colors.h"
 #include "ui/theme_controller.h"
 
-// Draws the application in a colour scheme and a style while a test runs, and
-// gives back the system's scheme and the style it had afterwards.
+// Draws the application in a colour scheme, a style and the colours a user
+// chose while a test runs, and gives back the system's scheme, the style it
+// had and the theme's own colours afterwards.
 
 namespace verdandi::tests
 {
@@ -80,6 +83,37 @@ inline constexpr std::array kAppearances{
     Appearance{"dark, windows11", Qt::ColorScheme::Dark, "windows11"},
     Appearance{"light, windowsvista", Qt::ColorScheme::Light, "windowsvista"},
     Appearance{"dark, windowsvista, drawn with Fusion", Qt::ColorScheme::Dark, "windowsvista"},
+};
+
+/** A theme that chooses color for role in the dark scheme, or in the light scheme if darkScheme is false. */
+[[nodiscard]] inline domain::Theme themeWith(domain::ThemeColorRole role, bool darkScheme, domain::RgbColor color)
+{
+    domain::Theme theme;
+    (darkScheme ? theme.dark : theme.light)[role] = color;
+    return theme;
+}
+
+/**
+ * Makes theme the colours that the user chose while it exists, as
+ * ui::ThemeController does, and clears them afterwards.
+ */
+class ScopedCustomColors
+{
+public:
+    explicit ScopedCustomColors(const domain::Theme& theme)
+    {
+        ui::theme::setCustomColors(theme);
+    }
+
+    ~ScopedCustomColors()
+    {
+        ui::theme::setCustomColors(domain::Theme{});
+    }
+
+    ScopedCustomColors(const ScopedCustomColors&) = delete;
+    ScopedCustomColors& operator=(const ScopedCustomColors&) = delete;
+    ScopedCustomColors(ScopedCustomColors&&) = delete;
+    ScopedCustomColors& operator=(ScopedCustomColors&&) = delete;
 };
 
 /**

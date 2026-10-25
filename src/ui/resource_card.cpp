@@ -34,9 +34,8 @@ TextTone healthTone(domain::HealthLevel level)
 
 } // namespace
 
-ResourceCard::ResourceCard(const QString& title, QWidget* parent) : QFrame(parent)
+ResourceCard::ResourceCard(const QString& title, QWidget* parent) : CardFrame(parent)
 {
-    setFrameShape(QFrame::StyledPanel);
     setMinimumWidth(180);
 
     auto* layout = new QVBoxLayout(this);

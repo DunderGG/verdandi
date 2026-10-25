@@ -15,6 +15,7 @@ package "ui" $UI_COLOR {
 
     class SettingsDialog <<QDialog>> {
         settings() : Settings
+        colorButton(role, darkScheme) : ColorButton
     }
 
     class ThemeController <<QObject>> {
@@ -82,6 +83,12 @@ package "ui" $UI_COLOR {
     package "theme (verdandi_ui_theme)" as themePackage {
         class "theme::color()" as themeColor << (F,#FFF59D) >> {
             color(role : ThemeColorRole,\n      background : QColor) : QColor
+            setCustomColors(theme : Theme)
+        }
+
+        class ThemeNotifier <<QObject>> {
+            .. signal ..
+            colorsChanged()
         }
     }
 }
@@ -121,6 +128,8 @@ DashboardView *-- SparklineWidget
 pages *-- SparklineWidget
 SparklineWidget ..> themeColor : line and grid colours,\nwhen it paints
 ProcessModel ..> themeColor : highlights and icons,\nfor the rows' base colour
+ThemeController ..> themeColor : setCustomColors(),\nafter the palette roles
+themeColor ..> ThemeNotifier : colorsChanged(),\nfor the widgets that\nkeep a colour
 
 legend bottom left
     MainWindow passes every snapshot to every view, so that each history has no gaps

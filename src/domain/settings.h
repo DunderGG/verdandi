@@ -6,6 +6,8 @@
 #include <optional>
 #include <string_view>
 
+#include "theme.h"
+
 namespace verdandi::domain
 {
 
@@ -147,6 +149,7 @@ struct Settings
     DisplayUnits displayUnits{};
     DashboardPanels dashboardPanels{};
     ColorScheme colorScheme{ColorScheme::System};
+    Theme theme{};
     LogLevel logLevel{LogLevel::Info};
 
     bool operator==(const Settings&) const = default;

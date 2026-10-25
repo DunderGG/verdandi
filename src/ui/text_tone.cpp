@@ -54,6 +54,7 @@ TonedLabel::TonedLabel(TextTone tone, QWidget* parent) : QLabel(parent), m_tone(
 {
     setForegroundRole(kToneRole);
     applyTone();
+    connect(theme::ThemeNotifier::instance(), &theme::ThemeNotifier::colorsChanged, this, &TonedLabel::applyTone);
 }
 
 void TonedLabel::setTone(TextTone tone)

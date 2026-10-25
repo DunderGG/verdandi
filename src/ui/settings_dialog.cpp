@@ -6,19 +6,33 @@
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
+#include <optional>
 #include <vector>
 
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFont>
 #include <QFormLayout>
+#include <QFrame>
+#include <QGridLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QLayoutItem>
 #include <QLocale>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QString>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
+#include "domain/theme.h"
+#include "ui/color_button.h"
+#include "ui/theme/theme_colors.h"
 #include "ui/view_metrics.h"
 
 namespace verdandi::ui
@@ -60,6 +74,53 @@ constexpr std::array kNetworkRateUnitsItems{
     ComboItem<domain::NetworkRateUnits>{"Bits per second (Kbps, Mbps, Gbps)", domain::NetworkRateUnits::BitsPerSecond},
 };
 
+// A row of the colour list: the theme colour that it chooses, with its name and
+// what it colours, and the heading of a group of rows that it begins.
+struct ColorRow
+{
+    const char* heading{};
+    domain::ThemeColorRole role{};
+    const char* label{};
+    const char* toolTip{};
+};
+
+constexpr std::array kColorRows{
+    ColorRow{"Window and text", domain::ThemeColorRole::Window, "Window",
+             "Behind the tabs and the menu bar, and in dialogs. Windows' colour unless chosen."},
+    ColorRow{nullptr, domain::ThemeColorRole::Page, "Pages and lists",
+             "Tab pages, tables, lists and text boxes. Windows' colour unless chosen."},
+    ColorRow{nullptr, domain::ThemeColorRole::Card, "Cards",
+             "The dashboard's and the Network tab's cards. The pages' colour unless chosen."},
+    ColorRow{nullptr, domain::ThemeColorRole::Text, "Text", "Windows' colour unless chosen."},
+    ColorRow{nullptr, domain::ThemeColorRole::Accent, "Accent",
+             "Selections, check boxes and the current tab. Windows' accent colour unless chosen."},
+    ColorRow{"Charts", domain::ThemeColorRole::ChartLine1, "Line 1",
+             "Every chart's first line: CPU, memory, receive, and the first disk volume"},
+    ColorRow{nullptr, domain::ThemeColorRole::ChartLine2, "Line 2", "Send, and the second disk volume"},
+    ColorRow{nullptr, domain::ThemeColorRole::ChartLine3, "Line 3", "The third disk volume"},
+    ColorRow{nullptr, domain::ThemeColorRole::ChartLine4, "Line 4", "The fourth disk volume"},
+    ColorRow{nullptr, domain::ThemeColorRole::ChartLine5, "Line 5", "The fifth disk volume"},
+    ColorRow{nullptr, domain::ThemeColorRole::ChartGrid, "Grid", "The charts' grid and frame, drawn translucent"},
+    ColorRow{"Status", domain::ThemeColorRole::Good, "Good", "Healthy, and adapters that are Up"},
+    ColorRow{nullptr, domain::ThemeColorRole::Warning, "Warning", "A resource that needs attention"},
+    ColorRow{nullptr, domain::ThemeColorRole::Critical, "Critical", "A resource in a critical state"},
+    ColorRow{"Processes", domain::ThemeColorRole::ProcessStarted, "Started",
+             "The row of a process that started in the last few seconds, drawn translucent"},
+    ColorRow{nullptr, domain::ThemeColorRole::ProcessExited, "Exited",
+             "The row of a process that has exited, until it is removed, drawn translucent"},
+    ColorRow{nullptr, domain::ThemeColorRole::AccessDenied, "Access denied",
+             "The padlock before a process whose details Windows denied"},
+    ColorRow{nullptr, domain::ThemeColorRole::AccessNeverOpened, "Never opened",
+             "The shield before a process that Verdandi never opens"},
+    ColorRow{nullptr, domain::ThemeColorRole::AccessUnavailable, "No details",
+             "The barred circle before a process that has no details to read"},
+};
+static_assert(kColorRows.size() == domain::kThemeColorRoleCount, "the colour list has a row for every theme colour");
+
+// The height of the colour list, which scrolls, in device-independent pixels:
+// about a dozen rows, so the dialog stays as tall as its General tab.
+constexpr int kColorListHeight = 320;
+
 constexpr double kMillisecondsPerSecond = 1000.0;
 // One decimal shows every half-second step, which reaches each of Process
 // Explorer's update speeds.
@@ -88,6 +149,17 @@ template <typename Enum> void selectValue(QComboBox* comboBox, Enum value)
 template <typename Enum> Enum selectedValue(const QComboBox* comboBox)
 {
     return static_cast<Enum>(comboBox->currentData().toInt());
+}
+
+// A heading above a column of the colour list.
+QLabel* columnHeading(const QString& text, QWidget* parent)
+{
+    auto* heading = new QLabel(text, parent);
+    QFont headingFont = heading->font();
+    headingFont.setBold(true);
+    heading->setFont(headingFont);
+    heading->setAlignment(Qt::AlignCenter);
+    return heading;
 }
 
 // Widens the label column of each form to the widest of them, so that the
@@ -139,14 +211,6 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
     generalLayout->addRow("&Refresh interval:", m_refreshIntervalSpinBox);
     generalLayout->addRow("&Log level:", m_logLevelComboBox);
 
-    m_colorSchemeComboBox = createComboBox(kColorSchemeItems, this);
-    m_colorSchemeComboBox->setToolTip(
-        "Light or dark, or the one Windows sets for apps. A Windows contrast theme replaces both.");
-
-    auto* appearanceGroup = new QGroupBox("Appearance", this);
-    auto* appearanceLayout = new QFormLayout(appearanceGroup);
-    appearanceLayout->addRow("Colour &scheme:", m_colorSchemeComboBox);
-
     m_byteUnitsComboBox = createComboBox(kByteUnitsItems, this);
     m_byteUnitsComboBox->setToolTip("The units of memory, disk space, and I/O and network rates in bytes");
     m_networkRateUnitsComboBox = createComboBox(kNetworkRateUnitsItems, this);
@@ -156,7 +220,7 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
     auto* unitsLayout = new QFormLayout(unitsGroup);
     unitsLayout->addRow("&Byte units:", m_byteUnitsComboBox);
     unitsLayout->addRow("&Network throughput:", m_networkRateUnitsComboBox);
-    alignLabelColumns({generalLayout, appearanceLayout, unitsLayout});
+    alignLabelColumns({generalLayout, unitsLayout});
 
     // Named as the dashboard's cards are.
     m_cpuPanelCheckBox = new QCheckBox("&CPU", this);
@@ -173,6 +237,30 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
     dashboardLayout->addWidget(m_networkPanelCheckBox);
     dashboardLayout->addWidget(m_uptimePanelCheckBox);
 
+    auto* generalPage = new QWidget(this);
+    auto* generalPageLayout = new QVBoxLayout(generalPage);
+    generalPageLayout->setSpacing(kSectionSpacing);
+    generalPageLayout->addWidget(generalGroup);
+    generalPageLayout->addWidget(unitsGroup);
+    generalPageLayout->addWidget(dashboardGroup);
+    generalPageLayout->addStretch();
+
+    m_colorSchemeComboBox = createComboBox(kColorSchemeItems, this);
+    m_colorSchemeComboBox->setToolTip(
+        "Light or dark, or the one Windows sets for apps. A Windows contrast theme replaces both.");
+    auto* colorSchemeLayout = new QFormLayout();
+    colorSchemeLayout->addRow("Colour &scheme:", m_colorSchemeComboBox);
+
+    auto* appearancePage = new QWidget(this);
+    auto* appearancePageLayout = new QVBoxLayout(appearancePage);
+    appearancePageLayout->setSpacing(kSectionSpacing);
+    appearancePageLayout->addLayout(colorSchemeLayout);
+    appearancePageLayout->addWidget(createColorsGroup());
+
+    m_tabWidget = new QTabWidget(this);
+    m_tabWidget->addTab(generalPage, "General");
+    m_tabWidget->addTab(appearancePage, "Appearance");
+
     m_buttonBox =
         new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, this);
     connect(m_buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -182,15 +270,71 @@ SettingsDialog::SettingsDialog(const domain::Settings& settings, QWidget* parent
 
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(kSectionSpacing);
-    layout->addWidget(generalGroup);
-    layout->addWidget(appearanceGroup);
-    layout->addWidget(unitsGroup);
-    layout->addWidget(dashboardGroup);
+    layout->addWidget(m_tabWidget);
     layout->addWidget(m_buttonBox);
-    // Nothing in the dialog gains from more room, so it keeps its size.
+    // The list of colours scrolls, and nothing else gains from more room, so
+    // the dialog keeps its size.
     layout->setSizeConstraint(QLayout::SetFixedSize);
 
     setSettings(settings);
+}
+
+QGroupBox* SettingsDialog::createColorsGroup()
+{
+    auto* list = new QWidget(this);
+    auto* grid = new QGridLayout(list);
+    grid->setHorizontalSpacing(kItemSpacing);
+    grid->setColumnStretch(1, 1);
+    grid->setColumnStretch(2, 1);
+    int row = 0;
+    grid->addWidget(columnHeading("Light", list), row, 1);
+    grid->addWidget(columnHeading("Dark", list), row, 2);
+    ++row;
+
+    for (const ColorRow& entry : kColorRows) {
+        if (entry.heading != nullptr) {
+            auto* heading = new QLabel(entry.heading, list);
+            QFont headingFont = heading->font();
+            headingFont.setBold(true);
+            heading->setFont(headingFont);
+            grid->addWidget(heading, row, 0, 1, 3);
+            ++row;
+        }
+        auto* label = new QLabel(entry.label, list);
+        label->setToolTip(entry.toolTip);
+        grid->addWidget(label, row, 0);
+        for (const bool isDark : {false, true}) {
+            auto* button = new ColorButton(list);
+            button->setDefaultColor(theme::defaultColor(entry.role, isDark));
+            button->setDialogTitle(QString("%1 in the %2 scheme").arg(entry.label, isDark ? "dark" : "light"));
+            button->setToolTip(entry.toolTip);
+            grid->addWidget(button, row, isDark ? 2 : 1);
+            m_colorButtons[isDark ? 1 : 0][static_cast<std::size_t>(entry.role)] = button;
+        }
+        ++row;
+    }
+
+    auto* scrollArea = new QScrollArea(this);
+    scrollArea->setWidget(list);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setFixedHeight(kColorListHeight);
+    // As wide as the list and the scroll bar beside it, so nothing is cut off.
+    scrollArea->setMinimumWidth(list->sizeHint().width() + scrollArea->verticalScrollBar()->sizeHint().width());
+
+    m_resetColorsButton = new QPushButton("Reset C&olours", this);
+    m_resetColorsButton->setToolTip("Every colour back to its default, in both schemes");
+    connect(m_resetColorsButton, &QPushButton::clicked, this, [this] { setTheme(domain::Theme{}); });
+    auto* buttonRow = new QHBoxLayout();
+    buttonRow->addStretch();
+    buttonRow->addWidget(m_resetColorsButton);
+
+    auto* group = new QGroupBox("Colours", this);
+    auto* groupLayout = new QVBoxLayout(group);
+    groupLayout->addWidget(scrollArea);
+    groupLayout->addLayout(buttonRow);
+    return group;
 }
 
 void SettingsDialog::setSettings(const domain::Settings& settings)
@@ -207,6 +351,34 @@ void SettingsDialog::setSettings(const domain::Settings& settings)
     m_diskPanelCheckBox->setChecked(settings.dashboardPanels.disk);
     m_networkPanelCheckBox->setChecked(settings.dashboardPanels.network);
     m_uptimePanelCheckBox->setChecked(settings.dashboardPanels.uptime);
+
+    setTheme(settings.theme);
+}
+
+void SettingsDialog::setTheme(const domain::Theme& colors)
+{
+    for (const bool isDark : {false, true}) {
+        const domain::ThemeColors& schemeColors = colors.colors(isDark);
+        for (std::size_t role = 0; role < domain::kThemeColorRoleCount; ++role) {
+            const std::optional<domain::RgbColor>& chosen = schemeColors.colors[role];
+            m_colorButtons[isDark ? 1 : 0][role]->setColor(chosen ? std::optional{theme::toQColor(*chosen)}
+                                                                  : std::nullopt);
+        }
+    }
+}
+
+domain::Theme SettingsDialog::shownTheme() const
+{
+    domain::Theme shown;
+    for (const bool isDark : {false, true}) {
+        domain::ThemeColors& schemeColors = isDark ? shown.dark : shown.light;
+        for (std::size_t role = 0; role < domain::kThemeColorRoleCount; ++role) {
+            if (const std::optional<QColor>& chosen = m_colorButtons[isDark ? 1 : 0][role]->color()) {
+                schemeColors.colors[role] = theme::toRgbColor(*chosen);
+            }
+        }
+    }
+    return shown;
 }
 
 domain::Settings SettingsDialog::settings() const
@@ -227,6 +399,7 @@ domain::Settings SettingsDialog::settings() const
                 .uptime = m_uptimePanelCheckBox->isChecked(),
             },
         .colorScheme = selectedValue<domain::ColorScheme>(m_colorSchemeComboBox),
+        .theme = shownTheme(),
         .logLevel = selectedValue<domain::LogLevel>(m_logLevelComboBox),
     };
 }
@@ -250,6 +423,21 @@ QComboBox* SettingsDialog::logLevelComboBox() const
 QComboBox* SettingsDialog::colorSchemeComboBox() const
 {
     return m_colorSchemeComboBox;
+}
+
+ColorButton* SettingsDialog::colorButton(domain::ThemeColorRole role, bool darkScheme) const
+{
+    return m_colorButtons[darkScheme ? 1 : 0][static_cast<std::size_t>(role)];
+}
+
+QPushButton* SettingsDialog::resetColorsButton() const
+{
+    return m_resetColorsButton;
+}
+
+QTabWidget* SettingsDialog::tabWidget() const
+{
+    return m_tabWidget;
 }
 
 QComboBox* SettingsDialog::byteUnitsComboBox() const
