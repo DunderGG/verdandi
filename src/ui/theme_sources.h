@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include <QPalette>
+
 #include "domain/theme.h"
 
 namespace verdandi::ui
@@ -30,6 +32,9 @@ struct ThemeImport
  *                      name.
  * windowsColorScheme — returns the scheme that Windows sets for apps, whose
  *                      theme Follow Windows draws with.
+ * windowsPalette     — returns Windows' own palette for a scheme, whose
+ *                      colours the colour samples take for the palette's
+ *                      roles that neither a theme nor the user chose.
  * readTheme          — reads the theme file at a path.
  * addTheme           — writes a theme to the themes folder, in place of the
  *                      one of the same name, and returns std::nullopt when it
@@ -38,13 +43,15 @@ struct ThemeImport
  *                      std::nullopt when it did, and otherwise why it did not.
  * While themes is empty, the dialog offers the built-in themes only; while
  * windowsColorScheme is, Follow Windows takes the scheme that the application
- * draws in. Import... is disabled while readTheme or addTheme is empty, and
- * Export... while exportTheme is.
+ * draws in; and while windowsPalette is, the samples take the application's
+ * palette. Import... is disabled while themes, readTheme or addTheme is
+ * empty, and Export... while exportTheme is.
  */
 struct ThemeSources
 {
     std::function<std::vector<domain::NamedTheme>()> themes{};
     std::function<domain::ColorScheme()> windowsColorScheme{};
+    std::function<QPalette(domain::ColorScheme)> windowsPalette{};
     std::function<ThemeImport(const std::filesystem::path&)> readTheme{};
     std::function<std::optional<std::string>(const domain::NamedTheme&)> addTheme{};
     std::function<std::optional<std::string>(const std::filesystem::path&, const domain::Theme&)> exportTheme{};

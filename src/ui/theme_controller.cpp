@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <optional>
 #include <utility>
 
 #include <QApplication>
+#include <QColor>
 #include <QGuiApplication>
 #include <QPalette>
 #include <QStyle>
@@ -28,6 +30,14 @@ const QString kDarkStyle = "fusion";
 // The placeholder text in text boxes is the text colour at this opacity, as
 // in Qt's palettes for Windows.
 constexpr float kPlaceholderTextAlpha = 0.5f;
+
+// The window and base colours of Qt's light and dark palettes with the
+// windows11 style, which the theme's built-in shades are checked against
+// (DC-150).
+const QColor kLightWindow{0xf3, 0xf3, 0xf3};
+const QColor kLightBase{0xff, 0xff, 0xff};
+const QColor kDarkWindow{0x1e, 0x1e, 0x1e};
+const QColor kDarkBase{0x2d, 0x2d, 0x2d};
 
 bool isStyle(const QString& name)
 {
@@ -109,6 +119,21 @@ Qt::ColorScheme ThemeController::colorScheme() const
 domain::ColorScheme ThemeController::windowsColorScheme() const
 {
     return m_windowsColorScheme;
+}
+
+QPalette ThemeController::windowsPalette(domain::ColorScheme scheme) const
+{
+    const bool isDark = scheme == domain::ColorScheme::Dark;
+    if (const std::optional<QPalette>& drawn = m_windowsPalettes[isDark ? 1 : 0]) {
+        return *drawn;
+    }
+    QPalette palette = m_windowsPalettes[isDark ? 0 : 1].value_or(QApplication::palette());
+    palette.setColor(QPalette::Window, isDark ? kDarkWindow : kLightWindow);
+    palette.setColor(QPalette::Base, isDark ? kDarkBase : kLightBase);
+    for (const QPalette::ColorRole role : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText}) {
+        palette.setColor(role, isDark ? QColor(Qt::white) : QColor(Qt::black));
+    }
+    return palette;
 }
 
 void ThemeController::setThemes(std::vector<domain::NamedTheme> themes)
@@ -240,6 +265,9 @@ void ThemeController::applyColors()
         palette.setColor(QPalette::Base, own.color(QPalette::Base));
     }
     const bool isDark = colorScheme() == Qt::ColorScheme::Dark;
+    if (!isContrastTheme) {
+        m_windowsPalettes[isDark ? 1 : 0] = own;
+    }
     const domain::ThemeColors& colors = isDark ? m_darkColors : m_lightColors;
     // A contrast theme's colours are the user's too, and replace any others.
     if (!isContrastTheme) {

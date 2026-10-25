@@ -58,6 +58,7 @@ add_executable(verdandi_tests
     unit/main_window_test.cpp
     unit/card_frame_test.cpp
     unit/color_button_test.cpp
+    unit/color_sample_test.cpp
     unit/dashboard_view_test.cpp
     unit/dashboard_formatting_test.cpp
     unit/performance_view_test.cpp

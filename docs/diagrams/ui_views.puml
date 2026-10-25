@@ -17,10 +17,16 @@ package "ui" $UI_COLOR {
     class SettingsDialog <<QDialog>> {
         settings() : Settings
         colorButton(role) : ColorButton
+        colorSample(role) : ColorSample
+    }
+
+    class ColorSample <<QWidget>> {
+        setColors(colors : SampleColors)
     }
 
     class ThemeController <<QObject>> {
         colorScheme() : Qt::ColorScheme
+        windowsPalette(scheme) : QPalette
         setThemes(themes : vector<NamedTheme>)
         themeName() : string
         setSettings(settings : Settings)
@@ -80,6 +86,7 @@ package "ui" $UI_COLOR {
     struct ThemeSources {
         {field} themes : function<vector<NamedTheme>()>
         {field} windowsColorScheme : function<ColorScheme()>
+        {field} windowsPalette : function<QPalette(ColorScheme)>
         {field} readTheme : function<ThemeImport(path)>
         {field} addTheme : function<optional<string>(NamedTheme)>
         {field} exportTheme : function<optional<string>(path, Theme)>
@@ -134,6 +141,7 @@ ProcessSortFilterProxyModel o-- ProcessModel : source
 ProcessesView o-- ProcessTerminator
 MainWindow o-- ThemeSources
 SettingsDialog ..> ThemeSources : the theme list,\nImport..., Export...
+SettingsDialog *-- "19" ColorSample : the colours shown, and\nWindows' palette for the rest
 NetworkView *-- AdapterThroughputHistory
 AdapterThroughputHistory ..> SampleHistory
 DashboardView ..> SampleHistory

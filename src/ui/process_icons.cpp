@@ -90,18 +90,27 @@ void paintBarredCircle(QPainter& painter, const QColor& color)
 QIcon detailsStatusIcon(domain::ProcessDetailsStatus status, bool darkSurface)
 {
     switch (status) {
-        case domain::ProcessDetailsStatus::AccessDenied: {
-            const QColor color = theme::color(domain::ThemeColorRole::AccessDenied, darkSurface);
+        case domain::ProcessDetailsStatus::AccessDenied:
+            return detailsStatusIcon(status, theme::color(domain::ThemeColorRole::AccessDenied, darkSurface));
+        case domain::ProcessDetailsStatus::NotQueried:
+            return detailsStatusIcon(status, theme::color(domain::ThemeColorRole::AccessNeverOpened, darkSurface));
+        case domain::ProcessDetailsStatus::Unavailable:
+            return detailsStatusIcon(status, theme::color(domain::ThemeColorRole::AccessUnavailable, darkSurface));
+        case domain::ProcessDetailsStatus::Available:
+            break;
+    }
+    return paintIcon(nullptr);
+}
+
+QIcon detailsStatusIcon(domain::ProcessDetailsStatus status, const QColor& color)
+{
+    switch (status) {
+        case domain::ProcessDetailsStatus::AccessDenied:
             return paintIcon([&color](QPainter& painter) { paintPadlock(painter, color); });
-        }
-        case domain::ProcessDetailsStatus::NotQueried: {
-            const QColor color = theme::color(domain::ThemeColorRole::AccessNeverOpened, darkSurface);
+        case domain::ProcessDetailsStatus::NotQueried:
             return paintIcon([&color](QPainter& painter) { paintShield(painter, color); });
-        }
-        case domain::ProcessDetailsStatus::Unavailable: {
-            const QColor color = theme::color(domain::ThemeColorRole::AccessUnavailable, darkSurface);
+        case domain::ProcessDetailsStatus::Unavailable:
             return paintIcon([&color](QPainter& painter) { paintBarredCircle(painter, color); });
-        }
         case domain::ProcessDetailsStatus::Available:
             break;
     }

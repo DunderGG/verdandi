@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <QAbstractButton>
+#include <QApplication>
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
@@ -34,6 +35,7 @@
 #include <QLayoutItem>
 #include <QLocale>
 #include <QMessageBox>
+#include <QPalette>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -47,6 +49,7 @@
 
 #include "domain/theme.h"
 #include "ui/color_button.h"
+#include "ui/color_sample.h"
 #include "ui/theme/theme_colors.h"
 #include "ui/view_metrics.h"
 
@@ -330,7 +333,7 @@ QGroupBox* SettingsDialog::createColorsGroup()
     auto* list = new QWidget(this);
     auto* grid = new QGridLayout(list);
     grid->setHorizontalSpacing(kItemSpacing);
-    grid->setColumnStretch(1, 1);
+    grid->setColumnStretch(2, 1);
     int row = 0;
     for (const ColorRow& entry : kColorRows) {
         if (entry.heading != nullptr) {
@@ -338,7 +341,7 @@ QGroupBox* SettingsDialog::createColorsGroup()
             QFont headingFont = heading->font();
             headingFont.setBold(true);
             heading->setFont(headingFont);
-            grid->addWidget(heading, row, 0, 1, 2);
+            grid->addWidget(heading, row, 0, 1, 3);
             ++row;
         }
         auto* label = new QLabel(entry.label, list);
@@ -348,7 +351,12 @@ QGroupBox* SettingsDialog::createColorsGroup()
         auto* button = new ColorButton(list);
         button->setToolTip(entry.toolTip);
         grid->addWidget(button, row, 1);
+        connect(button, &ColorButton::colorChanged, this, &SettingsDialog::showSampleColors);
+        auto* sample = new ColorSample(entry.role, list);
+        sample->setToolTip(entry.toolTip);
+        grid->addWidget(sample, row, 2);
         m_colorButtons[static_cast<std::size_t>(entry.role)] = button;
+        m_colorSamples[static_cast<std::size_t>(entry.role)] = sample;
         ++row;
     }
 
@@ -376,6 +384,7 @@ QGroupBox* SettingsDialog::createColorsGroup()
         for (ColorButton* button : m_colorButtons) {
             button->setColor(std::nullopt);
         }
+        showSampleColors();
     });
     auto* buttonRow = new QHBoxLayout();
     buttonRow->addWidget(m_importThemeButton);
@@ -576,6 +585,45 @@ void SettingsDialog::showTheme(const std::string& name)
         button->setDialogTitle(QString("%1 in %2").arg(entry.label, themeName));
     }
     m_colorsGroup->setTitle(QString("Colours of %1").arg(themeName));
+    showSampleColors();
+}
+
+void SettingsDialog::showSampleColors()
+{
+    const domain::Theme theme = themeNamed(m_shownTheme);
+    const bool isDark = theme.scheme == domain::ColorScheme::Dark;
+    SampleColors colors;
+    for (std::size_t role = 0; role < domain::kThemeColorRoleCount; ++role) {
+        const ColorButton* button = m_colorButtons[role];
+        std::optional<QColor> color = button->color() ? button->color() : button->defaultColor();
+        // A translucent role keeps its built-in opacity, as theme::color() gives it.
+        if (const std::optional<QColor> builtIn =
+                theme::defaultColor(static_cast<domain::ThemeColorRole>(role), isDark);
+            color && builtIn) {
+            color->setAlpha(builtIn->alpha());
+        }
+        colors[role] = color.value_or(QColor{});
+    }
+
+    // The palette's roles that neither the theme nor the user chose take
+    // Windows' colours, and the cards the pages'.
+    const QPalette windows =
+        m_themeSources.windowsPalette ? m_themeSources.windowsPalette(theme.scheme) : QApplication::palette();
+    const auto fill = [&colors](domain::ThemeColorRole role, const QColor& color) {
+        QColor& shown = colors[static_cast<std::size_t>(role)];
+        if (!shown.isValid()) {
+            shown = color;
+        }
+    };
+    fill(domain::ThemeColorRole::Window, windows.color(QPalette::Window));
+    fill(domain::ThemeColorRole::Page, windows.color(QPalette::Base));
+    fill(domain::ThemeColorRole::Text, windows.color(QPalette::WindowText));
+    fill(domain::ThemeColorRole::Accent, windows.color(QPalette::Accent));
+    fill(domain::ThemeColorRole::Card, colors[static_cast<std::size_t>(domain::ThemeColorRole::Page)]);
+
+    for (ColorSample* sample : m_colorSamples) {
+        sample->setColors(colors);
+    }
 }
 
 void SettingsDialog::keepShownColors()
@@ -676,6 +724,11 @@ QComboBox* SettingsDialog::themeComboBox() const
 ColorButton* SettingsDialog::colorButton(domain::ThemeColorRole role) const
 {
     return m_colorButtons[static_cast<std::size_t>(role)];
+}
+
+ColorSample* SettingsDialog::colorSample(domain::ThemeColorRole role) const
+{
+    return m_colorSamples[static_cast<std::size_t>(role)];
 }
 
 QGroupBox* SettingsDialog::colorsGroup() const

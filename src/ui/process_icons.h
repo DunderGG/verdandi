@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QColor>
 #include <QIcon>
 
 #include "domain/process_info.h"
@@ -21,5 +22,9 @@ namespace verdandi::ui
  * QGuiApplication.
  */
 [[nodiscard]] QIcon detailsStatusIcon(domain::ProcessDetailsStatus status, bool darkSurface);
+
+/** Returns the icon for status, as detailsStatusIcon() paints it, in color, such as one that the user has not applied
+ * yet. */
+[[nodiscard]] QIcon detailsStatusIcon(domain::ProcessDetailsStatus status, const QColor& color);
 
 } // namespace verdandi::ui

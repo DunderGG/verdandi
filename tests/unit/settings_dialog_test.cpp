@@ -17,6 +17,7 @@
 #include <QGroupBox>
 #include <QLocale>
 #include <QMessageBox>
+#include <QPalette>
 #include <QPoint>
 #include <QPushButton>
 #include <QString>
@@ -26,6 +27,7 @@
 #include "domain/theme.h"
 #include "support/settings_samples.h"
 #include "ui/color_button.h"
+#include "ui/color_sample.h"
 #include "ui/settings_dialog.h"
 #include "ui/theme/theme_colors.h"
 #include "ui/theme_sources.h"
@@ -34,6 +36,7 @@ using namespace verdandi::domain;
 using std::chrono::milliseconds;
 using verdandi::tests::nonDefaultSettings;
 using verdandi::ui::ColorButton;
+using verdandi::ui::ColorSample;
 using verdandi::ui::SettingsDialog;
 using verdandi::ui::ThemeImport;
 using verdandi::ui::ThemeSources;
@@ -86,6 +89,25 @@ Theme oceanTheme()
     Theme theme{.scheme = ColorScheme::Dark};
     theme.colors[ThemeColorRole::Accent] = RgbColor{.red = 0xf4, .green = 0xb7, .blue = 0x40};
     return theme;
+}
+
+// Windows' palette for each scheme, as the samples take it, in colours that
+// no theme of the tests chooses.
+QPalette windowsPalette(ColorScheme scheme)
+{
+    const bool isDark = scheme == ColorScheme::Dark;
+    QPalette palette;
+    palette.setColor(QPalette::Window, isDark ? QColor(0x11, 0x11, 0x11) : QColor(0xee, 0xee, 0xee));
+    palette.setColor(QPalette::Base, isDark ? QColor(0x22, 0x22, 0x22) : QColor(0xfe, 0xfe, 0xfe));
+    palette.setColor(QPalette::WindowText, isDark ? QColor(0xdd, 0xdd, 0xdd) : QColor(0x01, 0x01, 0x01));
+    palette.setColor(QPalette::Accent, QColor(0x33, 0x66, 0xcc));
+    return palette;
+}
+
+// The colour that the samples of dialog draw role in.
+QColor sampleColor(const SettingsDialog& dialog, ThemeColorRole role)
+{
+    return dialog.colorSample(ThemeColorRole::Text)->colors()[static_cast<std::size_t>(role)];
 }
 
 } // namespace
@@ -216,6 +238,74 @@ TEST(SettingsDialog, ThemeNotInTheList_FollowWindowsSelected)
 
     EXPECT_EQ(dialog.themeComboBox()->currentData().toString(), "Follow Windows");
     EXPECT_EQ(dialog.settings().theme, kFollowWindowsTheme);
+}
+
+TEST(SettingsDialog, ColorSamples_BesideEachButtonInTheColoursOfTheThemeShown)
+{
+    std::vector<NamedTheme> themes{{.name = "Ocean", .theme = oceanTheme()}};
+    Settings settings{.theme = "Ocean"};
+    settings.themeColors["Ocean"][ThemeColorRole::Card] = RgbColor{.red = 0x20, .green = 0x20, .blue = 0x20};
+    settings.themeColors["Ocean"][ThemeColorRole::ProcessStarted] = RgbColor{.red = 0x00, .green = 0xff, .blue = 0x00};
+    SettingsDialog dialog(settings);
+    ThemeSources sources = sourcesWith(themes);
+    sources.windowsPalette = windowsPalette;
+    dialog.setThemeSources(sources);
+    const QWidget* appearance = dialog.tabWidget()->widget(1);
+
+    for (std::size_t index = 0; index < kThemeColorRoleCount; ++index) {
+        const auto role = static_cast<ThemeColorRole>(index);
+        SCOPED_TRACE(index);
+        const ColorSample* sample = dialog.colorSample(role);
+        ASSERT_NE(sample, nullptr);
+        EXPECT_EQ(sample->role(), role);
+        EXPECT_TRUE(appearance->isAncestorOf(sample));
+        // Every sample draws with the same colours, which the others' roles need.
+        EXPECT_EQ(sample->colors(), dialog.colorSample(ThemeColorRole::Text)->colors());
+    }
+    struct Case
+    {
+        const char* name{};
+        ThemeColorRole role{};
+        QColor expected{};
+    };
+    QColor started(0x00, 0xff, 0x00);
+    started.setAlpha(verdandi::ui::theme::defaultColor(ThemeColorRole::ProcessStarted, true)->alpha());
+    const std::array cases{
+        Case{"the user's", ThemeColorRole::Card, QColor(0x20, 0x20, 0x20)},
+        Case{"the user's, with the built-in opacity", ThemeColorRole::ProcessStarted, started},
+        Case{"the theme's", ThemeColorRole::Accent, QColor(0xf4, 0xb7, 0x40)},
+        Case{"the built-in shade for the theme's scheme", ThemeColorRole::Good,
+             *verdandi::ui::theme::defaultColor(ThemeColorRole::Good, true)},
+        Case{"Windows' window", ThemeColorRole::Window, QColor(0x11, 0x11, 0x11)},
+        Case{"Windows' base", ThemeColorRole::Page, QColor(0x22, 0x22, 0x22)},
+        Case{"Windows' text", ThemeColorRole::Text, QColor(0xdd, 0xdd, 0xdd)},
+    };
+    for (const auto& [name, role, expected] : cases) {
+        SCOPED_TRACE(name);
+        EXPECT_EQ(sampleColor(dialog, role), expected);
+    }
+}
+
+TEST(SettingsDialog, ColorSamples_FollowTheColoursChosenAndTheThemeShown)
+{
+    SettingsDialog dialog(Settings{.theme = std::string{kLightTheme}});
+    dialog.setThemeSources(ThemeSources{.windowsPalette = windowsPalette});
+    // Cards are the pages' colour unless chosen.
+    ASSERT_EQ(sampleColor(dialog, ThemeColorRole::Card), QColor(0xfe, 0xfe, 0xfe));
+
+    ColorButton* page = dialog.colorButton(ThemeColorRole::Page);
+    page->setColor(QColor(0xf0, 0xf0, 0xf0));
+    emit page->colorChanged(page->color());
+    EXPECT_EQ(sampleColor(dialog, ThemeColorRole::Page), QColor(0xf0, 0xf0, 0xf0));
+    EXPECT_EQ(sampleColor(dialog, ThemeColorRole::Card), QColor(0xf0, 0xf0, 0xf0));
+
+    dialog.resetColorsButton()->click();
+    EXPECT_EQ(sampleColor(dialog, ThemeColorRole::Page), QColor(0xfe, 0xfe, 0xfe));
+
+    selectTheme(dialog, "Dark");
+    EXPECT_EQ(sampleColor(dialog, ThemeColorRole::Page), QColor(0x22, 0x22, 0x22));
+    EXPECT_EQ(sampleColor(dialog, ThemeColorRole::ChartLine1),
+              *verdandi::ui::theme::defaultColor(ThemeColorRole::ChartLine1, true));
 }
 
 TEST(SettingsDialog, ResetColours_EveryColourOfTheThemeShownToItsOwn)

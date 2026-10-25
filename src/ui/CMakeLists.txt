@@ -9,6 +9,8 @@ add_library(verdandi_ui STATIC
     card_frame.h
     color_button.cpp
     color_button.h
+    color_sample.cpp
+    color_sample.h
     cpu_performance_page.cpp
     cpu_performance_page.h
     dashboard_formatting.cpp

@@ -437,6 +437,52 @@ TEST(ThemeController, Destroyed_ClearsTheChosenColours)
     EXPECT_FALSE(QCoreApplication::testAttribute(Qt::AA_SetPalette));
 }
 
+TEST(ThemeController, WindowsPalette_SchemeDrawnIn_ItsOwnWithoutTheChosenColours)
+{
+    const ScopedColorScheme light(Qt::ColorScheme::Light);
+    ThemeController controller;
+    const QColor ownWindow = QApplication::palette().color(QPalette::Window);
+    Settings settings{.theme = std::string{kLightTheme}};
+    settings.themeColors[std::string{kLightTheme}][ThemeColorRole::Window] = kWindow;
+
+    controller.setSettings(settings);
+
+    ASSERT_EQ(QApplication::palette().color(QPalette::Window), toQColor(kWindow));
+    EXPECT_EQ(controller.windowsPalette(ColorScheme::Light).color(QPalette::Window), ownWindow);
+}
+
+TEST(ThemeController, WindowsPalette_SchemeNotDrawnIn_QtsSurfacesAndTextForItWithTheAccentDrawn)
+{
+    struct Case
+    {
+        const char* name{};
+        Qt::ColorScheme drawn{};
+        ColorScheme other{};
+        QColor window{};
+        QColor base{};
+        QColor text{};
+    };
+    const std::array cases{
+        Case{"dark, while drawing light", Qt::ColorScheme::Light, ColorScheme::Dark, QColor(0x1e, 0x1e, 0x1e),
+             QColor(0x2d, 0x2d, 0x2d), QColor(Qt::white)},
+        Case{"light, while drawing dark", Qt::ColorScheme::Dark, ColorScheme::Light, QColor(0xf3, 0xf3, 0xf3),
+             QColor(Qt::white), QColor(Qt::black)},
+    };
+
+    for (const auto& [name, drawn, other, window, base, text] : cases) {
+        SCOPED_TRACE(name);
+        const ScopedColorScheme scheme(drawn);
+        const ThemeController controller;
+
+        const QPalette palette = controller.windowsPalette(other);
+
+        EXPECT_EQ(palette.color(QPalette::Window), window);
+        EXPECT_EQ(palette.color(QPalette::Base), base);
+        EXPECT_EQ(palette.color(QPalette::WindowText), text);
+        EXPECT_EQ(palette.color(QPalette::Accent), QApplication::palette().color(QPalette::Accent));
+    }
+}
+
 TEST(ThemeController, ColorSchemeName_EachScheme)
 {
     struct Case

@@ -122,6 +122,8 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
     mainWindow.setThemeSources(verdandi::ui::ThemeSources{
         .themes = [&themeController] { return themeController.themes(); },
         .windowsColorScheme = [&themeController] { return themeController.windowsColorScheme(); },
+        .windowsPalette =
+            [&themeController](verdandi::domain::ColorScheme scheme) { return themeController.windowsPalette(scheme); },
         .readTheme =
             [](const std::filesystem::path& path) {
                 const verdandi::persistence::ThemeReadResult read = verdandi::persistence::loadThemeFile(path);

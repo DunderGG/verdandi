@@ -28,6 +28,7 @@ namespace verdandi::ui
 {
 
 class ColorButton;
+class ColorSample;
 
 /**
  * Settings dialog: edits a copy of the user's preferences (DC-124). Its
@@ -37,8 +38,10 @@ class ColorButton;
  * folder's (DC-149, DC-153), and a list of the colours of the theme that it
  * draws with, Light or Dark for Follow Windows, with a ColorButton for each,
  * which scrolls (DC-151). The buttons show the user's colour, or the theme's
- * own as the default. Choosing another theme keeps the colours chosen in the
- * one before. Below the list, Import... adds a theme file to the themes
+ * own as the default, and a ColorSample beside each shows its colour as the
+ * monitor draws it, with the colours that the list shows, or Windows' for the
+ * palette's roles that neither the theme nor the user chose. Choosing
+ * another theme keeps the colours chosen in the one before. Below the list, Import... adds a theme file to the themes
  * folder and chooses it, Export... writes the theme shown, with the colours
  * shown, to a theme file (DC-152), and Reset Colours sets every colour of the
  * theme shown to the theme's own. OK accepts, Cancel and Escape reject, and
@@ -115,6 +118,8 @@ public:
     [[nodiscard]] QCheckBox* uptimePanelCheckBox() const;
     /** Returns the button that chooses role's colour in the theme shown. */
     [[nodiscard]] ColorButton* colorButton(domain::ThemeColorRole role) const;
+    /** Returns the sample of role's colour beside its button. */
+    [[nodiscard]] ColorSample* colorSample(domain::ThemeColorRole role) const;
     [[nodiscard]] QGroupBox* colorsGroup() const;
     [[nodiscard]] QPushButton* importThemeButton() const;
     [[nodiscard]] QPushButton* exportThemeButton() const;
@@ -139,6 +144,8 @@ private:
     void showTheme(const std::string& name);
     // Keeps the colours that the colour buttons show as the user's colours in the theme shown.
     void keepShownColors();
+    // Gives the samples the colours that the colour buttons show.
+    void showSampleColors();
     // The theme that the colour buttons show for the theme chosen.
     [[nodiscard]] std::string themeToShow() const;
     // The theme named name, with its own colours: a built-in one, or one of m_themes.
@@ -161,6 +168,7 @@ private:
     QCheckBox* m_uptimePanelCheckBox{nullptr};
     // The colour buttons, each indexed by its role's value.
     std::array<ColorButton*, domain::kThemeColorRoleCount> m_colorButtons{};
+    std::array<ColorSample*, domain::kThemeColorRoleCount> m_colorSamples{};
     QGroupBox* m_colorsGroup{nullptr};
     QPushButton* m_importThemeButton{nullptr};
     QPushButton* m_exportThemeButton{nullptr};

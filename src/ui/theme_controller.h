@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <functional>
 #include <map>
 #include <optional>
@@ -8,6 +9,7 @@
 #include <vector>
 
 #include <QObject>
+#include <QPalette>
 #include <QString>
 
 #include "domain/settings.h"
@@ -75,6 +77,16 @@ public:
     [[nodiscard]] domain::ColorScheme windowsColorScheme() const;
 
     /**
+     * Returns Windows' own palette for scheme, without a theme's or the
+     * user's colours: as the application last drew it in that scheme
+     * without a contrast theme. For a scheme it has not drawn in, it is the
+     * palette of the one it has, or the application's, with the window, base
+     * and text colours of Qt's palette for scheme with the windows11 style,
+     * which stand for Windows'.
+     */
+    [[nodiscard]] QPalette windowsPalette(domain::ColorScheme scheme) const;
+
+    /**
      * Makes themes, from the themes folder, the themes that the settings can
      * choose besides the built-in ones, ordered by name whatever its case,
      * and draws with the theme in use again if it changed. None until set.
@@ -136,6 +148,8 @@ private:
     domain::ThemeColors m_lightColors{};
     domain::ThemeColors m_darkColors{};
     domain::ColorScheme m_windowsColorScheme{domain::ColorScheme::Light};
+    // Windows' own palettes of the light and the dark scheme, once drawn in.
+    std::array<std::optional<QPalette>, 2> m_windowsPalettes{};
 };
 
 /**
