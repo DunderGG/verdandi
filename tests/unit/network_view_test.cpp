@@ -15,6 +15,7 @@
 
 #include "domain/settings.h"
 #include "domain/system_snapshot.h"
+#include "support/color_scheme.h"
 #include "support/network_samples.h"
 #include "support/readouts.h"
 #include "support/snapshots.h"

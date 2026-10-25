@@ -17,6 +17,12 @@ package "ui" $UI_COLOR {
         settings() : Settings
     }
 
+    class ThemeController <<QObject>> {
+        colorScheme() : Qt::ColorScheme
+        .. signal ..
+        colorSchemeChanged(scheme)
+    }
+
     class DashboardView <<QWidget>> {
         updateSnapshot(snapshot : SystemSnapshot)
         m_cpuHistory, m_memoryHistory, … : SampleHistory
@@ -87,6 +93,7 @@ package "app" $APP_COLOR {
 SamplingScheduler ..> MainWindow : snapshotReady → onSnapshotReady,\nQt::QueuedConnection
 mainCpp ..> MainWindow : sets the settings, and connects\nsettingsChanged → SettingsService::change(),\nwhich applies and saves them
 mainCpp ..> ProcessesView : terminateOwnedProcess,\nthe monitor's identity
+mainCpp ..> ThemeController : creates before the window,\nand logs the colour scheme
 MainWindow ..> SettingsDialog : opens on a copy\nof the settings
 
 MainWindow *-- DashboardView

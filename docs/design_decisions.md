@@ -95,6 +95,8 @@ Each entry heading has an anchor of its ID alone on the line above it, `<a id="d
   - [DC-105](#dc-105): Retired, the rule is in the coding guidelines
   - [DC-126](#dc-126): Display units: every formatter of a size or a rate takes them, and every view shows the latest values in new units at once
   - [DC-128](#dc-128): Per-monitor DPI awareness (V2) declared in the application manifest, which Qt keeps
+- [Colour schemes and themes](#colour-schemes-and-themes)
+  - [DC-147](#dc-147): The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
 - [Dashboard tab](#dashboard-tab)
   - [DC-45](#dc-45): Health evaluation: domain types, a pure evaluator in `monitoring`, and the result carried in the snapshot
   - [DC-46](#dc-46): Dashboard cards: `ResourceCard` widgets fed by pure formatting helpers
@@ -948,6 +950,21 @@ The rule and its reasons are in [coding_guidelines.md — Text colours](coding_g
 
 ---
 
+## Colour schemes and themes
+
+The colour scheme that the monitor draws in.
+
+<a id="dc-147"></a>
+### DC-147: The colour scheme is the one Windows sets, as Qt reads it at startup and follows it, and the log names it
+
+**Decision:** The monitor draws in the colour scheme that Windows sets for applications, which Qt reports in `QStyleHints::colorScheme()`: light, dark, or `Qt::ColorScheme::Unknown` while a Windows contrast theme is on. Qt reads it when the `QApplication` starts, before the first window exists, and again whenever Windows changes it. `ui::ThemeController` follows it for the whole application and signals each change. `main.cpp` creates it before the main window, and the log names the scheme at startup and after each change.
+
+**Rationale:** Qt's Windows plugin already reads the `AppsUseLightTheme` registry value and `SPI_GETHIGHCONTRAST`, hears Windows' setting changes, gives the application the scheme's palette and darkens the title bars, and the windows11 style picks its control colours by the same scheme. A reader of the registry in `platform/windows` would duplicate it and could disagree with what Qt draws. Qt reads the scheme before any widget exists, so the first frame is drawn in it and nothing needs applying at startup. A contrast theme is not a third scheme: Qt reports none for it, and its colours are the user's, chosen to be legible. The scheme belongs to the application rather than to a window, so the controller is the app's, as the settings service is, and outlives the window. A report about the monitor's colours can be checked against the scheme the log names.
+
+**History:** Dark mode and theme support, the Windows colour scheme at startup.
+
+---
+
 ## Dashboard tab
 
 The resource cards and the health evaluation they show.
@@ -1794,11 +1811,11 @@ How this file is organized and kept current.
 <a id="dc-116"></a>
 ### DC-116: Entries grouped by topic, in ID order within each topic
 
-**Decision:** The entries are grouped under `##` headings by what they decide, not by the phase that made them: Windows APIs, modules and dependencies, the domain model, the scheduler and collectors, each collector area, charts, the main window and shared UI, each tab and process termination, settings, startup and logging, build and tooling, testing, and this log. A line under each heading says what the topic covers. Within a topic the entries are in ID order, so a new entry goes at the end of its topic. An entry that spans topics goes under the one whose code it mostly decides, and the contents list each entry once. The phase that made an entry, and each change since, are in its **History:** line ([DC-115](#dc-115)).
+**Decision:** The entries are grouped under `##` headings by what they decide, not by the phase that made them: Windows APIs, modules and dependencies, the domain model, the scheduler and collectors, each collector area, charts, the main window and shared UI, colour schemes and themes, each tab and process termination, settings, startup and logging, build and tooling, testing, and this log. A line under each heading says what the topic covers. Within a topic the entries are in ID order, so a new entry goes at the end of its topic. An entry that spans topics goes under the one whose code it mostly decides, and the contents list each entry once. The phase that made an entry, and each change since, are in its **History:** line ([DC-115](#dc-115)).
 
 **Rationale:** A reader comes to this file with a question about one part of the code, not about one phase. Later phases change earlier decisions, so under phase headings one topic's entries were spread out, the connectivity collector's over Phases 2, 4 and 5, and entries made for code-review findings went under whichever heading was near. The phase still leads to the roadmap item or the review behind a decision, so the history line keeps it. ID order needs no judgement beyond the topic, and no entry moves when one is added, whereas a reading order would have to be decided again for every new entry. In one file, links name `design_decisions.md#dc-NN` ([DC-114](#dc-114)), so moving an entry breaks none, and one search covers every decision. Process termination is a topic of its own because its checks in `platform/windows` and its action on the Processes tab are one feature, with an entry each ([DC-87](#dc-87), [DC-88](#dc-88)).
 
-**History:** Maintenance, design decisions; code review F-45 (settings, and startup and logging, in the list).
+**History:** Maintenance, design decisions; code review F-45 (settings, and startup and logging, in the list); Dark mode and theme support (colour schemes and themes in the list).
 
 ---
 

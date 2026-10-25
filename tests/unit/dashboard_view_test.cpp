@@ -15,6 +15,7 @@
 #include "domain/health_status.h"
 #include "domain/settings.h"
 #include "domain/system_snapshot.h"
+#include "support/color_scheme.h"
 #include "support/snapshots.h"
 #include "support/text_contrast.h"
 #include "ui/charts/sparkline_widget.h"

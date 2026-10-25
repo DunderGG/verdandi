@@ -266,6 +266,7 @@ The slow-collector thread's refreshes, the merge that every tick reads, and how 
 | Process termination | `TerminateProcess` (unelevated processes the current user owns only) |
 | Network profile names | `INetworkListManager` (COM, lazy: after a connectivity change, or once a minute, and at most once a second, on the collector's own thread) |
 | Sleep and resume | `WM_POWERBROADCAST` (`PBT_APMSUSPEND`, `PBT_APMRESUMEAUTOMATIC`), seen by a Qt native event filter on the UI thread |
+| Colour scheme (light, dark or a contrast theme) | Qt's `QStyleHints::colorScheme()`, which reads the `AppsUseLightTheme` registry value and `SPI_GETHIGHCONTRAST` |
 | Single instance | `CreateMutexW` in the `Local\` namespace, named with `ProcessIdToSessionId` and the user's SID (`GetTokenInformation(TokenUser)`, `ConvertSidToStringSidW`); `AllowSetForegroundWindow` for the PID that `GetNamedPipeServerProcessId` returns |
 | Hardware inventory (future) | WMI `Win32_ComputerSystem` / `Win32_Processor` (startup only) |
 | Per-disk I/O rates (future) | PDH (only where no direct Win32 alternative exists) |
@@ -316,7 +317,7 @@ Use spdlog through vcpkg. Configure in the `app` module at startup. The log goes
 | --- | --- |
 | `trace` | Sampling timing details, raw API return values. |
 | `debug` | Collector lifecycle, cache hits/misses, thread start/stop, a process denying a details query (routine when unelevated). |
-| `info` | Application startup, settings loaded, connectivity state changes. |
+| `info` | Application startup, settings loaded, connectivity state and colour scheme changes. |
 | `warn` | Process action denied (e.g. termination), counter unavailable, connectivity notifications unavailable, a value in the settings file that is not used as it stands. |
 | `error` | Collector failure, API error codes, unrecoverable configuration issues. |
 
@@ -358,6 +359,10 @@ When elevated process termination is added, launch a small helper executable via
 ## High-DPI support
 
 Enable per-monitor DPI awareness in the application manifest. `src/app/verdandi.manifest` declares `PerMonitorV2`, the awareness Qt 6 asks for, so Qt keeps it and scales each window to its monitor ([DC-128](design_decisions.md#dc-128)). Qt 6 handles most scaling automatically, but verify icon and resource sizing. Test on 100%, 125%, 150%, and 200% scaling. This is a build-time configuration item, not a runtime feature toggle.
+
+## Colour schemes and themes
+
+Windows sets a light or a dark colour scheme for applications, or a contrast theme, whose colours replace both. Qt reads the scheme when the `QApplication` starts, before any window exists, and again whenever Windows changes it, and reports it in `QStyleHints::colorScheme()`: `Light`, `Dark`, or `Unknown` while a contrast theme is on. The application palette follows it, the windows11 style draws the controls in it, and Qt's Windows plugin darkens the title bars in the dark scheme. `ui::ThemeController`, which `main.cpp` creates before the window, follows the scheme for the application, and the log names it at startup and after each change ([DC-147](design_decisions.md#dc-147)).
 
 ## Sleep and resume handling
 

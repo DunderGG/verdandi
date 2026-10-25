@@ -49,7 +49,7 @@ activate worker
 worker -> worker : enter COM's MTA,\nread the names at once,\nthen wait for a change\nor for them to expire
 scheduler -> scheduler : set the change listeners\nof the two collectors
 runMonitor -> scheduler : setInterval(),\nsetSlowInterval()
-runMonitor -> runMonitor : SettingsService;\nPowerEventFilter, installed\nas a native event filter
+runMonitor -> runMonitor : SettingsService;\nPowerEventFilter, installed\nas a native event filter;\nThemeController, which logs\nthe colour scheme
 runMonitor -> window ** : construct, setSettings(),\nsetProcessTerminator()
 runMonitor -> runMonitor : connect snapshotReady to\nonSnapshotReady (Qt::Queued-\nConnection) and settingsChanged;\nInstanceServer listens
 runMonitor -> scheduler : start()
@@ -87,7 +87,7 @@ destroy slowThread
 runMonitor -> runMonitor : return: the locals are\ndestroyed in reverse order
 runMonitor -> runMonitor : InstanceServer\nstops listening
 runMonitor -> window !! : destroy
-runMonitor -> runMonitor : PowerEventFilter,\nSettingsService
+runMonitor -> runMonitor : ThemeController,\nPowerEventFilter,\nSettingsService
 runMonitor -> scheduler : ~SamplingScheduler()
 scheduler -> scheduler : clear the change listeners
 scheduler -> profiles : ~NetworkProfileCollector()

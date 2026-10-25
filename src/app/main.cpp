@@ -25,6 +25,7 @@
 #include "system_collectors.h"
 #include "ui/main_window.h"
 #include "ui/processes_view.h"
+#include "ui/theme_controller.h"
 #include "verdandi_product_version.h"
 #include "verdandi_version.h"
 
@@ -69,6 +70,16 @@ int runMonitor(QApplication& application, const verdandi::domain::Settings& sett
     // Sampling pauses while the system sleeps, and no rate spans the sleep (DC-129).
     verdandi::app::PowerEventFilter powerEventFilter(scheduler);
     application.installNativeEventFilter(&powerEventFilter);
+
+    // Qt reads the colour scheme that Windows sets for applications when the
+    // QApplication starts, and follows it (DC-147). Declared before the
+    // window, so that it outlives it.
+    verdandi::ui::ThemeController themeController;
+    spdlog::info("Drawing in {}, which Windows sets", verdandi::ui::colorSchemeName(themeController.colorScheme()));
+    QObject::connect(&themeController, &verdandi::ui::ThemeController::colorSchemeChanged, &themeController,
+                     [](Qt::ColorScheme scheme) {
+                         spdlog::info("Drawing in {} from now on", verdandi::ui::colorSchemeName(scheme));
+                     });
 
     verdandi::ui::MainWindow mainWindow;
     mainWindow.setSettings(settings);

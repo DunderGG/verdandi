@@ -35,6 +35,7 @@ endfunction()
 add_executable(verdandi_tests
     test_main.cpp
     support/adapter_lists.h
+    support/color_scheme.h
     support/fake_collectors.h
     support/fake_subscription.h
     support/log_capture.h
@@ -75,6 +76,7 @@ add_executable(verdandi_tests
     unit/sparkline_geometry_test.cpp
     unit/sparkline_widget_test.cpp
     unit/text_tone_test.cpp
+    unit/theme_controller_test.cpp
     unit/cpu_collector_test.cpp
     unit/memory_collector_test.cpp
     unit/disk_collector_test.cpp
